@@ -16,6 +16,7 @@ Este é um bot do Discord para gerenciar serviços em um servidor, permitindo qu
 - **Bibliotecas necessárias**:
   - `discord.py`
   - `json`
+  - `asyncio`
   
 Você pode instalar as dependências necessárias criando um ambiente virtual (recomendado) e utilizando o `pip`:
 
@@ -55,7 +56,7 @@ pip install discord.py
 Clone o repositório para a sua máquina:
 
 ```bash
-git clone https://github.com/seu_usuario/bot_discord_neo.git
+git clone git@github.com:Abnerlucasm/bot_discord_neo.git
 cd bot_discord_neo
 ```
 
