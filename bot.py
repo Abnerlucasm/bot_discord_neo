@@ -163,32 +163,37 @@ class ActionButtons(discord.ui.View):
             logging.info(f"{interaction.user.name} liberou o serviço {config['nome']}")
 
     async def reportar_problema(self, interaction: discord.Interaction):
-        config = SERVICOS_CONFIG[self.servico]
-        try:
-            guild = interaction.guild
-            role = guild.get_role(CARGO_TI_ID)
-            if role:
-                mensagem = f"⚠️ Problema reportado no serviço **{config['nome']}** por <@{interaction.user.id}>."
-                channel = bot.get_channel(1328462406996725913)
-                if channel:
-                    await channel.send(mensagem)
+            config = SERVICOS_CONFIG[self.servico]
+            try:
+                guild = interaction.guild
+                role = guild.get_role(CARGO_TI_ID)  # Obtém o cargo de TI
+                if role:
+                    # Mensagem com a menção ao cargo de TI
+                    mensagem = f"⚠️ Problema reportado no serviço **{config['nome']}** por <@{interaction.user.id}>. Aviso para o setor de TI: <@&{CARGO_TI_ID}>"
+                    channel = bot.get_channel(1328462406996725913)
+                    if channel:
+                        await channel.send(mensagem)  # Envia a mensagem para o canal
+                    await interaction.response.send_message(
+                        f"Problema reportado para o setor de TI.",
+                        ephemeral=True
+                    )
+                    logging.info(f"{interaction.user.name} reportou um problema com {config['nome']}")
+            except Exception as e:
+                logging.error(f"Erro ao reportar problema: {str(e)}")
                 await interaction.response.send_message(
-                    f"Problema reportado para o setor de TI.",
+                    "Ocorreu um erro ao reportar o problema. Tente novamente mais tarde.",
                     ephemeral=True
                 )
-                logging.info(f"{interaction.user.name} reportou um problema com {config['nome']}")
-        except Exception as e:
-            logging.error(f"Erro ao reportar problema: {str(e)}")
-            await interaction.response.send_message(
-                "Ocorreu um erro ao reportar o problema. Tente novamente mais tarde.",
-                ephemeral=True
-            )
+
 
 @bot.event
 async def on_ready():
     try:
         print(f'{bot.user} está pronto!')
         logging.info(f'Bot iniciado como {bot.user}')
+        
+         # Atualizando o status do bot
+        await bot.change_presence(activity=discord.Game("Neo Chamados"))
         
         # Registrar o comando glassfish
         comando_glassfish = app_commands.Command(
