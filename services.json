@@ -77,10 +77,10 @@
         "usuario": null,
         "grupos_permitidos": ["994341371634782279"]
     },
-    "72 - 1": {
-        "nome": "Glassfish 72 - Instância 1",
+    "224 - 1": {
+        "nome": "Glassfish 224 - Instância 1",
         "status": "disponível",
         "usuario": null,
-        "grupos_permitidos": ["994341371634782279"]
+        "grupos_permitidos": ["994300483348996176", "994341371634782279"]
     }
 }
