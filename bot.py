@@ -2,6 +2,15 @@ import discord
 from discord.ext import commands
 import asyncio
 import json
+import logging
+import uuid
+
+# Configuração do sistema de log
+logging.basicConfig(
+    filename="glassfish.log",  # Nome do arquivo de log
+    level=logging.INFO,        # Nível do log
+    format="%(asctime)s - %(levelname)s - %(message)s",  # Formato das mensagens
+)
 
 # Carregar configurações do arquivo JSON
 with open("services.json", "r", encoding="utf-8") as file:
@@ -10,6 +19,9 @@ with open("services.json", "r", encoding="utf-8") as file:
 intents = discord.Intents.default()
 intents.message_content = True  # Habilitando a permissão de conteúdo de mensagens
 bot = commands.Bot(command_prefix="/", intents=intents)
+
+# ID do cargo do setor de TI que receberá as notificações
+CARGO_TI_ID = 1327312138573713449  
 
 # Usar uma variável global para mapear usuários
 usuario_servico = {}
@@ -21,24 +33,13 @@ class ServiceDropdown(discord.ui.View):
 
 class ServiceSelect(discord.ui.Select):
     def __init__(self, user_roles):
-        # Filtra os serviços que o usuário tem permissão para acessar
         servicos_permitidos = {}
         for key, config in SERVICOS_CONFIG.items():
             for role in user_roles:
-                # Convertendo as IDs de cargos para inteiro, caso elas sejam strings no arquivo JSON
                 if int(role) in [int(x) for x in config["grupos_permitidos"]]:
                     servicos_permitidos[key] = config
-                    break  # Se um cargo permitido for encontrado, adiciona o serviço
+                    break
         
-        # Debug: Verificando os cargos permitidos e cargos do usuário
-        print(f"Serviços disponíveis para os cargos: {user_roles}")  # IDs dos cargos do usuário
-        for key, config in SERVICOS_CONFIG.items():
-            print(f"Serviço: {config['nome']}")
-            print(f"Cargos permitidos: {config['grupos_permitidos']}")  # Mostrar os IDs dos cargos permitidos
-            print(f"Cargos do usuário: {user_roles}")  # Mostrar os IDs dos cargos do usuário
-
-        print(f"Serviços permitidos: {servicos_permitidos}")  # Mostrar os serviços permitidos após o filtro
-
         options = [
             discord.SelectOption(
                 label=config["nome"],
@@ -65,7 +66,7 @@ class ServiceSelect(discord.ui.Select):
             if config["status"] == "em uso" 
             else ""
         )
-
+        logging.info(f"{interaction.user.name} selecionou o serviço: {config['nome']} (Status: {config['status']})")
         view = ActionButtons(servico_selecionado)
         await interaction.response.send_message(
             f"{status_emoji} Você selecionou o serviço **{config['nome']}**. Status atual: **{config['status']}**{usuario_atual}. Escolha uma ação:",
@@ -77,9 +78,27 @@ class ActionButtons(discord.ui.View):
     def __init__(self, servico):
         super().__init__(timeout=None)
         self.servico = servico
+        self.add_item(self.create_button("Usar", "❎", discord.ButtonStyle.primary, f"usar_{servico}"))
+        self.add_item(self.create_button("Liberar", "✅", discord.ButtonStyle.success, f"liberar_{servico}"))
+        self.add_item(self.create_button("Reportar problema", "⚠️", discord.ButtonStyle.danger, f"reportar_{servico}"))
 
-    @discord.ui.button(label="Usar", style=discord.ButtonStyle.primary)
-    async def usar(self, interaction: discord.Interaction, button: discord.ui.Button):
+    def create_button(self, label, emoji, style, custom_id):
+        # Criação do botão com ID único e associação automática ao callback
+        button = discord.ui.Button(label=label, emoji=emoji, style=style, custom_id=custom_id)
+        button.callback = self.handle_callback  # Associar o método de callback
+        return button
+
+    async def handle_callback(self, interaction: discord.Interaction):
+        # Defina a lógica do que fazer ao clicar em um botão
+        custom_id = interaction.data["custom_id"]
+        if "usar" in custom_id:
+            await self.usar(interaction)
+        elif "liberar" in custom_id:
+            await self.liberar(interaction)
+        elif "reportar" in custom_id:
+            await self.reportar_problema(interaction)
+
+    async def usar(self, interaction: discord.Interaction):
         config = SERVICOS_CONFIG[self.servico]
         if config["status"] == "em uso":
             await interaction.response.send_message(
@@ -89,22 +108,18 @@ class ActionButtons(discord.ui.View):
         else:
             config["status"] = "em uso"
             config["usuario"] = interaction.user.name
-            # Persistir no arquivo JSON
             salvar_em_json()
-            # Enviar notificação para o canal de destino
             channel = bot.get_channel(1328462406996725913)
             if channel:
                 await channel.send(
                     f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>"
                 )
-        # Enviar resposta para o usuário
-        await interaction.response.send_message(
-            f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>",
-            ephemeral=True,
-        )
+            await interaction.response.send_message(
+                f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>",
+                ephemeral=True,
+            )
 
-    @discord.ui.button(label="Liberar", style=discord.ButtonStyle.success)
-    async def liberar(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def liberar(self, interaction: discord.Interaction):
         config = SERVICOS_CONFIG[self.servico]
         if config["status"] == "disponível":
             await interaction.response.send_message(
@@ -119,19 +134,46 @@ class ActionButtons(discord.ui.View):
         else:
             config["status"] = "disponível"
             config["usuario"] = None
-            # Persistir no arquivo JSON
             salvar_em_json()
-            # Enviar notificação para o canal de destino
             channel = bot.get_channel(1328462406996725913)
             if channel:
                 await channel.send(
                     f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>"
                 )
-        # Enviar resposta para o usuário
+            await interaction.response.send_message(
+                f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>",
+                ephemeral=True,
+            )
+
+    async def reportar_problema(self, interaction: discord.Interaction):
+        config = SERVICOS_CONFIG[self.servico]
+
+        # Enviar notificação para os membros com o cargo de TI
+        guild = interaction.guild
+        role = guild.get_role(CARGO_TI_ID)
+
+        if role:
+            mensagem = (
+                f"⚠️ Problema reportado no serviço **{config['nome']}** "
+                f"por <@{interaction.user.id}>. Verificar o sistema! "
+                f"Setor: <@&{role.id}>"
+            )
+            for member in role.members:
+                try:
+                    await member.send(mensagem)
+                except discord.Forbidden:
+                    print(f"Não foi possível enviar mensagem para {member}.")
+
+            # Enviar a mesma mensagem para o canal específico
+            channel = bot.get_channel(1328462406996725913)  # Substitua pelo ID do canal desejado
+            if channel:
+                await channel.send(mensagem)
+
+                # Responder ao usuário que o problema foi reportado
         await interaction.response.send_message(
-            f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>",
+            f"O problema foi reportado ao setor responsável: **{role.name}**. ⚠️",
             ephemeral=True,
-        )
+        )    
 
 # Registrar o comando ao iniciar o bot
 @bot.event
