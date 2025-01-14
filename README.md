@@ -1,5 +1,5 @@
 
-<img src="./icons/Discord.svg" width="48"> # Bot Discord Neo
+# Bot Discord Neo
 
 Este é um bot do Discord para gerenciar serviços em um servidor, permitindo que os usuários reservem e liberem serviços de acordo com suas permissões.
 
@@ -19,8 +19,6 @@ Este é um bot do Discord para gerenciar serviços em um servidor, permitindo qu
   - `asyncio`
   
 Você pode instalar as dependências necessárias criando um ambiente virtual (recomendado) e utilizando o `pip`:
-
-<img src="./icons/Bash-Dark.svg" width="48">
 
 ```bash
 # Criação do ambiente virtual
@@ -57,14 +55,12 @@ pip install discord.py
 
 Clone o repositório para a sua máquina:
 
-<img src="./icons/Bash-Dark.svg" width="48">
-
 ```bash
 git clone git@github.com:Abnerlucasm/bot_discord_neo.git
 cd bot_discord_neo
 ```
 
-<img src="./icons/Bash-Dark.svg" width="48"> ### 2. Configure o Ambiente
+### 2. Configure o Ambiente
 
 1. **Crie um ambiente virtual** (caso não tenha feito):
 
