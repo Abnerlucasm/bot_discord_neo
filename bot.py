@@ -83,22 +83,24 @@ class ActionButtons(discord.ui.View):
         config = SERVICOS_CONFIG[self.servico]
         if config["status"] == "em uso":
             await interaction.response.send_message(
-            f"O serviço **{config['nome']}** já está em uso por {config['usuario']}.",
-            ephemeral=True,
-        )
+                f"O serviço **{config['nome']}** já está em uso por {config['usuario']}.",
+                ephemeral=True,
+            )
         else:
             config["status"] = "em uso"
             config["usuario"] = interaction.user.name
-            # Enviar notificação para o canal de destino (somente aqui)
-            channel = bot.get_channel(1328462406996725913) 
+            # Persistir no arquivo JSON
+            salvar_em_json()
+            # Enviar notificação para o canal de destino
+            channel = bot.get_channel(1328462406996725913)
             if channel:
                 await channel.send(
-                f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>"
-            )
-        # Enviar resposta somente para o usuário que interagiu
+                    f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>"
+                )
+        # Enviar resposta para o usuário
         await interaction.response.send_message(
             f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>",
-            ephemeral=True,  # Aqui você pode optar por tornar a resposta visível apenas para o usuário
+            ephemeral=True,
         )
 
     @discord.ui.button(label="Liberar", style=discord.ButtonStyle.success)
@@ -106,27 +108,29 @@ class ActionButtons(discord.ui.View):
         config = SERVICOS_CONFIG[self.servico]
         if config["status"] == "disponível":
             await interaction.response.send_message(
-            f"O serviço **{config['nome']}** já está disponível.",
-            ephemeral=True,
-        )
+                f"O serviço **{config['nome']}** já está disponível.",
+                ephemeral=True,
+            )
         elif config["usuario"] != interaction.user.name:
             await interaction.response.send_message(
-            f"Apenas {config['usuario']} pode liberar este serviço.",
-            ephemeral=True,
-        )
+                f"Apenas {config['usuario']} pode liberar este serviço.",
+                ephemeral=True,
+            )
         else:
             config["status"] = "disponível"
             config["usuario"] = None
-            # Enviar notificação para o canal de destino (somente aqui)
-            channel = bot.get_channel(1328462406996725913) 
+            # Persistir no arquivo JSON
+            salvar_em_json()
+            # Enviar notificação para o canal de destino
+            channel = bot.get_channel(1328462406996725913)
             if channel:
                 await channel.send(
-                f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>"
-            )
-        # Enviar resposta somente para o usuário que interagiu
+                    f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>"
+                )
+        # Enviar resposta para o usuário
         await interaction.response.send_message(
             f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>",
-            ephemeral=True,  # Aqui você pode optar por tornar a resposta visível apenas para o usuário
+            ephemeral=True,
         )
 
 # Registrar o comando ao iniciar o bot
@@ -180,5 +184,10 @@ async def glassfish(interaction: discord.Interaction):
 # Carregar o token a partir do arquivo token.txt
 with open("token.txt", "r") as file:
     token = file.read().strip()  # Remove qualquer espaço extra
+
+# Função para persistir as mudanças no arquivo JSON
+def salvar_em_json():
+    with open("services.json", "w", encoding="utf-8") as file:
+        json.dump(SERVICOS_CONFIG, file, indent=4, ensure_ascii=False)
 
 bot.run(token)
