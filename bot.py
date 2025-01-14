@@ -1,27 +1,34 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import asyncio
 import json
 import logging
-import uuid
 
 # Configuração do sistema de log
 logging.basicConfig(
-    filename="glassfish.log",  # Nome do arquivo de log
-    level=logging.INFO,        # Nível do log
-    format="%(asctime)s - %(levelname)s - %(message)s",  # Formato das mensagens
+    filename="glassfish.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 # Carregar configurações do arquivo JSON
-with open("services.json", "r", encoding="utf-8") as file:
-    SERVICOS_CONFIG = json.load(file)
+try:
+    with open("services.json", "r", encoding="utf-8") as file:
+        SERVICOS_CONFIG = json.load(file)
+    logging.info("Arquivo services.json carregado com sucesso")
+except Exception as e:
+    logging.error(f"Erro ao carregar services.json: {str(e)}")
+    SERVICOS_CONFIG = {}
 
+# Inicializando os intents
 intents = discord.Intents.default()
-intents.message_content = True  # Habilitando a permissão de conteúdo de mensagens
+intents.message_content = True
+intents.members = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 # ID do cargo do setor de TI que receberá as notificações
-CARGO_TI_ID = 1327312138573713449  
+CARGO_TI_ID = 1327312138573713449
 
 # Usar uma variável global para mapear usuários
 usuario_servico = {}
@@ -50,14 +57,21 @@ class ServiceSelect(discord.ui.Select):
             for key, config in servicos_permitidos.items()
         ]
         
+        if not options:
+            options = [discord.SelectOption(label="Sem serviços disponíveis", value="none")]
+        
         super().__init__(
             placeholder="Selecione um serviço...",
             min_values=1,
             max_values=1,
             options=options,
         )
-        
+    
     async def callback(self, interaction: discord.Interaction):
+        if self.values[0] == "none":
+            await interaction.response.send_message("Não há serviços disponíveis para você.", ephemeral=True)
+            return
+            
         servico_selecionado = self.values[0]
         config = SERVICOS_CONFIG[servico_selecionado]
         status_emoji = "🔴" if config["status"] == "em uso" else "🟢"
@@ -83,13 +97,11 @@ class ActionButtons(discord.ui.View):
         self.add_item(self.create_button("Reportar problema", "⚠️", discord.ButtonStyle.danger, f"reportar_{servico}"))
 
     def create_button(self, label, emoji, style, custom_id):
-        # Criação do botão com ID único e associação automática ao callback
         button = discord.ui.Button(label=label, emoji=emoji, style=style, custom_id=custom_id)
-        button.callback = self.handle_callback  # Associar o método de callback
+        button.callback = self.handle_callback
         return button
 
     async def handle_callback(self, interaction: discord.Interaction):
-        # Defina a lógica do que fazer ao clicar em um botão
         custom_id = interaction.data["custom_id"]
         if "usar" in custom_id:
             await self.usar(interaction)
@@ -105,6 +117,7 @@ class ActionButtons(discord.ui.View):
                 f"O serviço **{config['nome']}** já está em uso por {config['usuario']}.",
                 ephemeral=True,
             )
+            logging.info(f"{interaction.user.name} tentou usar {config['nome']}, mas já está em uso")
         else:
             config["status"] = "em uso"
             config["usuario"] = interaction.user.name
@@ -118,6 +131,7 @@ class ActionButtons(discord.ui.View):
                 f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>",
                 ephemeral=True,
             )
+            logging.info(f"{interaction.user.name} começou a usar o serviço {config['nome']}")
 
     async def liberar(self, interaction: discord.Interaction):
         config = SERVICOS_CONFIG[self.servico]
@@ -126,11 +140,13 @@ class ActionButtons(discord.ui.View):
                 f"O serviço **{config['nome']}** já está disponível.",
                 ephemeral=True,
             )
+            logging.info(f"{interaction.user.name} tentou liberar {config['nome']}, mas já está disponível")
         elif config["usuario"] != interaction.user.name:
             await interaction.response.send_message(
                 f"Apenas {config['usuario']} pode liberar este serviço.",
                 ephemeral=True,
             )
+            logging.warning(f"{interaction.user.name} tentou liberar {config['nome']}, mas não tem permissão")
         else:
             config["status"] = "disponível"
             config["usuario"] = None
@@ -144,92 +160,105 @@ class ActionButtons(discord.ui.View):
                 f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>",
                 ephemeral=True,
             )
+            logging.info(f"{interaction.user.name} liberou o serviço {config['nome']}")
 
     async def reportar_problema(self, interaction: discord.Interaction):
         config = SERVICOS_CONFIG[self.servico]
-
-        # Enviar notificação para os membros com o cargo de TI
-        guild = interaction.guild
-        role = guild.get_role(CARGO_TI_ID)
-
-        if role:
-            mensagem = (
-                f"⚠️ Problema reportado no serviço **{config['nome']}** "
-                f"por <@{interaction.user.id}>. Verificar o sistema! "
-                f"Setor: <@&{role.id}>"
+        try:
+            guild = interaction.guild
+            role = guild.get_role(CARGO_TI_ID)
+            if role:
+                mensagem = f"⚠️ Problema reportado no serviço **{config['nome']}** por <@{interaction.user.id}>."
+                channel = bot.get_channel(1328462406996725913)
+                if channel:
+                    await channel.send(mensagem)
+                await interaction.response.send_message(
+                    f"Problema reportado para o setor de TI.",
+                    ephemeral=True
+                )
+                logging.info(f"{interaction.user.name} reportou um problema com {config['nome']}")
+        except Exception as e:
+            logging.error(f"Erro ao reportar problema: {str(e)}")
+            await interaction.response.send_message(
+                "Ocorreu um erro ao reportar o problema. Tente novamente mais tarde.",
+                ephemeral=True
             )
-            for member in role.members:
-                try:
-                    await member.send(mensagem)
-                except discord.Forbidden:
-                    print(f"Não foi possível enviar mensagem para {member}.")
 
-            # Enviar a mesma mensagem para o canal específico
-            channel = bot.get_channel(1328462406996725913)  # Substitua pelo ID do canal desejado
-            if channel:
-                await channel.send(mensagem)
-
-                # Responder ao usuário que o problema foi reportado
-        await interaction.response.send_message(
-            f"O problema foi reportado ao setor responsável: **{role.name}**. ⚠️",
-            ephemeral=True,
-        )    
-
-# Registrar o comando ao iniciar o bot
 @bot.event
 async def on_ready():
-    print(f'{bot.user} está pronto!')
-
-    # Aguarda alguns segundos para garantir que o bot tenha a permissão e os dados necessários
-    await asyncio.sleep(2)  # Espera 2 segundos antes de registrar os comandos
-
     try:
-        # Sincronizar globalmente os comandos
+        print(f'{bot.user} está pronto!')
+        logging.info(f'Bot iniciado como {bot.user}')
+        
+        # Registrar o comando glassfish
+        comando_glassfish = app_commands.Command(
+            name="glassfish",
+            description="Lista os serviços disponíveis",
+            callback=glassfish
+        )
+        bot.tree.add_command(comando_glassfish)
+        
         await bot.tree.sync()
         print("Comandos sincronizados globalmente.")
-    except discord.errors.Forbidden:
-        print("O bot não tem permissão para acessar informações globais.")
+        logging.info("Comandos sincronizados globalmente com sucesso")
+        
+    except Exception as e:
+        print(f"Erro durante a inicialização: {str(e)}")
+        logging.error(f"Erro durante a inicialização: {str(e)}")
 
-# Definir o comando 'glassfish' com o app_commands
-@bot.tree.command(name="glassfish", description="Lista os serviços disponíveis")
 async def glassfish(interaction: discord.Interaction):
-    # Obtém os IDs dos cargos do usuário
-    user_roles = [role.id for role in interaction.user.roles]
-    
-    # Verifica os cargos do usuário
-    print(f"Cargos do usuário: {user_roles}")
-    
-    # Filtra os serviços que o usuário tem permissão para acessar
-    servicos_permitidos = {
-        key: config for key, config in SERVICOS_CONFIG.items()
-        if any(int(role) in [int(x) for x in config["grupos_permitidos"]] for role in user_roles)
-    }
-    
-    # Debug: Verificando os cargos permitidos
-    print(f"Serviços permitidos: {servicos_permitidos}")
-
-    # Verifica se o usuário tem permissão
-    if not servicos_permitidos:
+    try:
+        logging.info(f"{interaction.user.name} executou o comando /glassfish")
+        
+        # Verificar se o usuário tem algum cargo
+        if not interaction.user.roles:
+            await interaction.response.send_message(
+                "Você precisa ter um cargo para acessar os serviços.",
+                ephemeral=True
+            )
+            return
+            
+        user_roles = [role.id for role in interaction.user.roles]
+        servicos_permitidos = {
+            key: config for key, config in SERVICOS_CONFIG.items()
+            if any(int(role) in [int(x) for x in config["grupos_permitidos"]] for role in user_roles)
+        }
+        
+        if not servicos_permitidos:
+            await interaction.response.send_message(
+                "Você não tem permissão para acessar nenhum serviço.",
+                ephemeral=True
+            )
+            logging.info(f"{interaction.user.name} tentou acessar serviços sem permissão")
+            return
+        
+        view = ServiceDropdown(user_roles)
         await interaction.response.send_message(
-            "Você não tem permissão para acessar nenhum serviço.",
+            "**Serviços disponíveis:** Selecione uma opção abaixo:", 
+            view=view,
             ephemeral=True
         )
-        return
+        
+    except Exception as e:
+        logging.error(f"Erro ao executar comando glassfish: {str(e)}")
+        await interaction.response.send_message(
+            "Ocorreu um erro ao listar os serviços. Tente novamente mais tarde.",
+            ephemeral=True
+        )
 
-    view = ServiceDropdown(user_roles)
-    await interaction.response.send_message(
-        "**Serviços disponíveis:** Selecione uma opção abaixo:", 
-        view=view,
-        ephemeral=True
-    )
-
-# Carregar o token a partir do arquivo token.txt
-with open("token.txt", "r") as file:
-    token = file.read().strip()  # Remove qualquer espaço extra
-
-# Função para persistir as mudanças no arquivo JSON
 def salvar_em_json():
-    with open("services.json", "w", encoding="utf-8") as file:
-        json.dump(SERVICOS_CONFIG, file, indent=4, ensure_ascii=False)
+    try:
+        with open("services.json", "w", encoding="utf-8") as file:
+            json.dump(SERVICOS_CONFIG, file, indent=4)
+        logging.info("Configurações salvas com sucesso em services.json")
+    except Exception as e:
+        logging.error(f"Erro ao salvar em services.json: {str(e)}")
 
-bot.run(token)
+# Carregar e executar o bot
+try:
+    with open("token.txt", "r") as file:
+        token = file.read().strip()
+    logging.info("Token carregado com sucesso")
+    bot.run(token)
+except Exception as e:
+    logging.error(f"Erro ao carregar/executar o bot: {str(e)}")
