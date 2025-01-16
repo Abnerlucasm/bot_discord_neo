@@ -17,6 +17,7 @@ Este é um bot do Discord para gerenciar serviços em um servidor, permitindo qu
   - `discord.py`
   - `json`
   - `asyncio`
+  - `logging`
   
 Você pode instalar as dependências necessárias criando um ambiente virtual (recomendado) e utilizando o `pip`:
 
@@ -188,6 +189,7 @@ O comando `/glassfish` lista os serviços disponíveis para o usuário, baseado 
 
 - **Usar**: Se o serviço estiver disponível, o usuário pode "reservá-lo" para uso. Isso alterará o status do serviço para "em uso".
 - **Liberar**: Caso o serviço esteja em uso, o usuário poderá liberá-lo, alterando seu status para "disponível".
+- **Reportar Problema**: Selecionando essa opção será emitido um aviso ao cargo/canal de moderação indicando que há um problema com o serviço mencionado.
 
 ### Redirecionamento de Notificações
 
