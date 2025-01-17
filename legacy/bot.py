@@ -25,7 +25,7 @@ except Exception as e:
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-bot = commands.Bot(command_prefix="/", intents=intents)
+bot = commands.Bot(command_prefix=".", intents=intents)
 
 # ID do cargo do setor de TI que receberá as notificações
 CARGO_TI_ID = 1327312138573713449
@@ -185,7 +185,6 @@ class ActionButtons(discord.ui.View):
                     ephemeral=True
                 )
 
-
 @bot.event
 async def on_ready():
     try:
@@ -250,6 +249,7 @@ async def glassfish(interaction: discord.Interaction):
             "Ocorreu um erro ao listar os serviços. Tente novamente mais tarde.",
             ephemeral=True
         )
+    
 
 def salvar_em_json():
     try:
