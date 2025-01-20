@@ -14,7 +14,7 @@ distro==1.9.0
 distro-info==1.7+build1
 httplib2==0.20.4
 idna==3.7
-Jinja2==3.1.2
+Jinja2==3.1.5
 jsonpatch==1.32
 jsonpointer==2.0
 jsonschema==4.10.3
