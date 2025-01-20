@@ -32,7 +32,7 @@ source venv/bin/activate
 venv\Scripts\activate
 
 # Instalação das dependências
-pip install discord.py
+pip install -r requirements.txt
 ```
 
 ## Estrutura do Projeto
@@ -40,13 +40,15 @@ pip install discord.py
 ```plaintext
 /bot_Discord_Neo
 │
-├── bot.py               # Código principal do bot
+├── main.py              # Código principal do bot
+├── cogs/                # Diretório que contem a logíca de cada comando do bot
 ├── services.json        # Arquivo JSON com a configuração dos serviços
 ├── token.txt            # Arquivo contendo o token do bot
+├── requirements         # Arquivo que contem as dependências necessárias para a execução do bot 
 └── venv/                # Ambiente virtual
 ```
 
-- **`bot.py`**: Contém o código do bot, que gerencia as interações com o Discord.
+- **`main.py`**: Contém o código do bot, que gerencia as interações com o Discord.
 - **`services.json`**: Configurações dos serviços, incluindo nomes, status e permissões.
 - **`token.txt`**: Contém o token do bot para autenticação no Discord.
 
@@ -81,7 +83,7 @@ cd bot_discord_neo
 3. **Instale as dependências**:
 
    ```bash
-   pip install discord.py
+   pip install -r requirements.txt
    ```
 
 ### 3. Configure o Arquivo de Serviços
@@ -115,10 +117,10 @@ YOUR_BOT_TOKEN_HERE
 
 ### 5. Execute o Bot
 
-Para rodar o bot, execute o seguinte comando no diretório onde o `bot.py` está localizado:
+Para rodar o bot, execute o seguinte comando no diretório onde o `main.py` está localizado:
 
 ```bash
-python bot.py
+python main.py
 ```
 
 O bot estará em execução e aguardando interações no servidor do Discord.
@@ -139,7 +141,7 @@ Description=Bot Discord Neo
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 /caminho/para/seu/bot/bot.py
+ExecStart=/usr/bin/python3 /caminho/para/seu/bot/main.py
 WorkingDirectory=/caminho/para/seu/bot
 Restart=always
 User=seu_usuario
@@ -181,26 +183,7 @@ Se configurado corretamente, o bot será executado automaticamente em segundo pl
 
 ## Como Funciona
 
-### Comando `/glassfish`
-
-O comando `/glassfish` lista os serviços disponíveis para o usuário, baseado nos cargos que ele possui. O bot apresentará uma lista de serviços e permitirá ao usuário selecionar um.
-
-### Ações de "Usar" e "Liberar"
-
-- **Usar**: Se o serviço estiver disponível, o usuário pode "reservá-lo" para uso. Isso alterará o status do serviço para "em uso".
-- **Liberar**: Caso o serviço esteja em uso, o usuário poderá liberá-lo, alterando seu status para "disponível".
-- **Reportar Problema**: Selecionando essa opção será emitido um aviso ao cargo/canal de moderação indicando que há um problema com o serviço mencionado.
-
-### Redirecionamento de Notificações
-
-Sempre que um serviço for utilizado ou liberado, o bot enviará uma notificação para um canal específico no servidor, informando a alteração no status do serviço.
-
-## Comandos
-
-- **`/glassfish`**: Lista os serviços disponíveis com base nos cargos do usuário.
-- **Botões de Ação**:
-  - **Usar**: Reserva o serviço.
-  - **Liberar**: Libera o serviço para outros usuários.
+Utilize o comando **`/ajuda`** ou **`/sobre`** para mais detalhes e explicações de cada comando
 
 ## Considerações
 
