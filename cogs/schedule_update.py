@@ -272,7 +272,7 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
             mensagem.append(f"**{EMOJI_DATA_ATUALIZACAO} • Data:** {data_atual}")
             mensagem.append(f"**{EMOJI_CHAMADOS_ATUALIZACAO} • Chamados:** {self.chamados}")
             mensagem.append(f"**{EMOJI_STATUS_ATUALIZACAO} • Status:** Pendente")
-            mensagem.append(f"**{EMOJI_USER_ATUALIZACAO} • Solicitado por:** <@{interaction.user.id}>")
+            mensagem.append(f"**{EMOJI_USER_ATUALIZACAO} • Lançado por:** <@{interaction.user.id}>")
 
             mensagem_final = '\n'.join(mensagem)
 
