@@ -107,7 +107,7 @@ class EditButton(discord.ui.Button):
 
 class CustomView(discord.ui.View):
     def __init__(self, modal_type: str, original_data: dict, author_id: int):
-        super().__init__()
+        super().__init__(timeout=None)
         self.add_item(StatusButton(author_id))
         self.add_item(EditButton(modal_type, original_data, author_id))
 
