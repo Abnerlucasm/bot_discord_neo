@@ -5,6 +5,8 @@ import logging
 import json
 
 CARGO_TI_ID = 1327312138573713449
+LOGS_CHANNEL_ID = 1328462406996725913
+PERSISTENT_CHANNEL_ID = 1328398423241789521
 
 class ProblemReportModal(discord.ui.Modal, title="Reportar Problema"):
     def __init__(self, servico, servicos_config):
@@ -32,7 +34,7 @@ class ProblemReportModal(discord.ui.Modal, title="Reportar Problema"):
                     f"**Descrição:** {self.problema.value}\n"
                     f"Aviso para o setor de TI: <@&{CARGO_TI_ID}>"
                 )
-                channel = guild.get_channel(1328462406996725913)
+                channel = guild.get_channel(LOGS_CHANNEL_ID)
                 if channel:
                     await channel.send(mensagem)
                 await interaction.response.send_message(
@@ -48,18 +50,23 @@ class ProblemReportModal(discord.ui.Modal, title="Reportar Problema"):
             )
 
 class ServiceDropdown(discord.ui.View):
-    def __init__(self, user_roles, servicos_config):
+    def __init__(self, user_roles, servicos_config, check_permissions=True):
         super().__init__(timeout=None)
-        self.add_item(ServiceSelect(user_roles, servicos_config))
+        self.add_item(ServiceSelect(user_roles, servicos_config, check_permissions))
 
 class ServiceSelect(discord.ui.Select):
-    def __init__(self, user_roles, servicos_config):
-        servicos_permitidos = {}
-        for key, config in servicos_config.items():
-            for role in user_roles:
-                if int(role) in [int(x) for x in config["grupos_permitidos"]]:
-                    servicos_permitidos[key] = config
-                    break
+    def __init__(self, user_roles, servicos_config, check_permissions=True):
+        self.servicos_config = servicos_config
+        
+        if check_permissions and user_roles:
+            servicos_permitidos = {}
+            for key, config in servicos_config.items():
+                for role in user_roles:
+                    if int(role) in [int(x) for x in config["grupos_permitidos"]]:
+                        servicos_permitidos[key] = config
+                        break
+        else:
+            servicos_permitidos = servicos_config
         
         options = [
             discord.SelectOption(
@@ -80,15 +87,24 @@ class ServiceSelect(discord.ui.Select):
             max_values=1,
             options=options,
         )
-        self.servicos_config = servicos_config
     
     async def callback(self, interaction: discord.Interaction):
         if self.values[0] == "none":
             await interaction.response.send_message("Não há serviços disponíveis para você.", ephemeral=True)
             return
-            
+        
+        user_roles = [role.id for role in interaction.user.roles]
         servico_selecionado = self.values[0]
         config = self.servicos_config[servico_selecionado]
+        
+        # Verifica permissões
+        if not any(int(role) in [int(x) for x in config["grupos_permitidos"]] for role in user_roles):
+            await interaction.response.send_message(
+                "Você não tem permissão para acessar este serviço.",
+                ephemeral=True
+            )
+            return
+            
         status_emoji = "🔴" if config["status"] == "em uso" else "🟢"
         usuario_atual = (
             f" (Em uso por: {config['usuario']})" 
@@ -119,12 +135,22 @@ class ActionButtons(discord.ui.View):
 
     async def handle_callback(self, interaction: discord.Interaction):
         custom_id = interaction.data["custom_id"]
-        if "usar" in custom_id:
-            await self.usar(interaction)
-        elif "liberar" in custom_id:
-            await self.liberar(interaction)
-        elif "reportar" in custom_id:
+        action_type = custom_id.split("_")[0]
+        
+        result = False
+        if action_type == "usar":
+            result = await self.usar(interaction)
+        elif action_type == "liberar":
+            result = await self.liberar(interaction)
+        elif action_type == "reportar":
             await self.reportar_problema(interaction)
+            return
+            
+        if result:
+            # Atualiza o dropdown persistente
+            cog = interaction.client.get_cog("GlassfishCog")
+            if cog:
+                await cog.refresh_persistent_message()
 
     async def usar(self, interaction: discord.Interaction):
         config = self.servicos_config[self.servico]
@@ -134,20 +160,22 @@ class ActionButtons(discord.ui.View):
                 ephemeral=True,
             )
             logging.info(f"{interaction.user.name} tentou usar {config['nome']}, mas já está em uso")
-        else:
-            config["status"] = "em uso"
-            config["usuario"] = interaction.user.name
-            self.salvar_em_json()
-            channel = interaction.guild.get_channel(1328462406996725913)
-            if channel:
-                await channel.send(
-                    f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>"
-                )
-            await interaction.response.send_message(
-                f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>",
-                ephemeral=True,
+            return False
+            
+        config["status"] = "em uso"
+        config["usuario"] = interaction.user.name
+        self.salvar_em_json()
+        channel = interaction.guild.get_channel(LOGS_CHANNEL_ID)
+        if channel:
+            await channel.send(
+                f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>"
             )
-            logging.info(f"{interaction.user.name} começou a usar o serviço {config['nome']}")
+        await interaction.response.send_message(
+            f"O serviço **{config['nome']}** está sendo usado por <@{interaction.user.id}> <:stop:1328441358188417025>",
+            ephemeral=True,
+        )
+        logging.info(f"{interaction.user.name} começou a usar o serviço {config['nome']}")
+        return True
 
     async def liberar(self, interaction: discord.Interaction):
         config = self.servicos_config[self.servico]
@@ -157,26 +185,29 @@ class ActionButtons(discord.ui.View):
                 ephemeral=True,
             )
             logging.info(f"{interaction.user.name} tentou liberar {config['nome']}, mas já está disponível")
+            return False
         elif config["usuario"] != interaction.user.name:
             await interaction.response.send_message(
                 f"Apenas {config['usuario']} pode liberar este serviço.",
                 ephemeral=True,
             )
             logging.warning(f"{interaction.user.name} tentou liberar {config['nome']}, mas não tem permissão")
-        else:
-            config["status"] = "disponível"
-            config["usuario"] = None
-            self.salvar_em_json()
-            channel = interaction.guild.get_channel(1328462406996725913)
-            if channel:
-                await channel.send(
-                    f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>"
-                )
-            await interaction.response.send_message(
-                f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>",
-                ephemeral=True,
+            return False
+            
+        config["status"] = "disponível"
+        config["usuario"] = None
+        self.salvar_em_json()
+        channel = interaction.guild.get_channel(LOGS_CHANNEL_ID)
+        if channel:
+            await channel.send(
+                f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>"
             )
-            logging.info(f"{interaction.user.name} liberou o serviço {config['nome']}")
+        await interaction.response.send_message(
+            f"O serviço **{config['nome']}** foi liberado por <@{interaction.user.id}> <:start:1328441356682793062>",
+            ephemeral=True,
+        )
+        logging.info(f"{interaction.user.name} liberou o serviço {config['nome']}")
+        return True
 
     async def reportar_problema(self, interaction: discord.Interaction):
         modal = ProblemReportModal(self.servico, self.servicos_config)
@@ -193,7 +224,47 @@ class ActionButtons(discord.ui.View):
 class GlassfishCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.persistent_message = None
         
+    async def setup_persistent_message(self):
+        """Configura ou atualiza a mensagem persistente no canal específico"""
+        channel = self.bot.get_channel(PERSISTENT_CHANNEL_ID)
+        if not channel:
+            logging.error(f"Canal {PERSISTENT_CHANNEL_ID} não encontrado")
+            return
+
+        # Procura por mensagem existente do bot
+        async for message in channel.history(limit=100):
+            if message.author == self.bot.user and "**Serviços Glassfish**" in message.content:
+                self.persistent_message = message
+                break
+
+        view = ServiceDropdown(None, self.bot.servicos_config, check_permissions=False)
+        message_content = (
+            "**Serviços Glassfish**\n"
+            "Selecione um serviço abaixo para gerenciá-lo.\n"
+            "🟢 = Disponível | 🔴 = Em uso"
+        )
+
+        if self.persistent_message:
+            await self.persistent_message.edit(content=message_content, view=view)
+        else:
+            self.persistent_message = await channel.send(message_content, view=view)
+        
+        logging.info("Mensagem persistente do Glassfish configurada/atualizada")
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Configura a mensagem persistente quando o bot iniciar"""
+        await self.setup_persistent_message()
+
+    async def refresh_persistent_message(self):
+        """Atualiza a mensagem persistente quando houver mudanças"""
+        if self.persistent_message:
+            view = ServiceDropdown(None, self.bot.servicos_config, check_permissions=False)
+            await self.persistent_message.edit(view=view)
+            logging.info("Mensagem persistente do Glassfish atualizada")
+            
     @app_commands.command(name="glassfish", description="Lista os serviços disponíveis")
     async def glassfish(self, interaction: discord.Interaction):
         try:
