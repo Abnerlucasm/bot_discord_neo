@@ -1,4 +1,3 @@
-# cogs/glassfish.py
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -6,6 +5,47 @@ import logging
 import json
 
 CARGO_TI_ID = 1327312138573713449
+
+class ProblemReportModal(discord.ui.Modal, title="Reportar Problema"):
+    def __init__(self, servico, servicos_config):
+        super().__init__()
+        self.servico = servico
+        self.servicos_config = servicos_config
+        
+        self.problema = discord.ui.TextInput(
+            label="Descrição do Problema",
+            style=discord.TextStyle.paragraph,
+            placeholder="Descreva o problema encontrado...",
+            required=True,
+            max_length=1000
+        )
+        self.add_item(self.problema)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        config = self.servicos_config[self.servico]
+        try:
+            guild = interaction.guild
+            role = guild.get_role(CARGO_TI_ID)
+            if role:
+                mensagem = (
+                    f"⚠️ Problema reportado no serviço **{config['nome']}** por <@{interaction.user.id}>\n"
+                    f"**Descrição:** {self.problema.value}\n"
+                    f"Aviso para o setor de TI: <@&{CARGO_TI_ID}>"
+                )
+                channel = guild.get_channel(1328462406996725913)
+                if channel:
+                    await channel.send(mensagem)
+                await interaction.response.send_message(
+                    f"Problema reportado para o setor de TI.",
+                    ephemeral=True
+                )
+                logging.info(f"{interaction.user.name} reportou um problema com {config['nome']}")
+        except Exception as e:
+            logging.error(f"Erro ao reportar problema: {str(e)}")
+            await interaction.response.send_message(
+                "Ocorreu um erro ao reportar o problema. Tente novamente mais tarde.",
+                ephemeral=True
+            )
 
 class ServiceDropdown(discord.ui.View):
     def __init__(self, user_roles, servicos_config):
@@ -139,26 +179,8 @@ class ActionButtons(discord.ui.View):
             logging.info(f"{interaction.user.name} liberou o serviço {config['nome']}")
 
     async def reportar_problema(self, interaction: discord.Interaction):
-        config = self.servicos_config[self.servico]
-        try:
-            guild = interaction.guild
-            role = guild.get_role(CARGO_TI_ID)
-            if role:
-                mensagem = f"⚠️ Problema reportado no serviço **{config['nome']}** por <@{interaction.user.id}>. Aviso para o setor de TI: <@&{CARGO_TI_ID}>"
-                channel = guild.get_channel(1328462406996725913)
-                if channel:
-                    await channel.send(mensagem)
-                await interaction.response.send_message(
-                    f"Problema reportado para o setor de TI.",
-                    ephemeral=True
-                )
-                logging.info(f"{interaction.user.name} reportou um problema com {config['nome']}")
-        except Exception as e:
-            logging.error(f"Erro ao reportar problema: {str(e)}")
-            await interaction.response.send_message(
-                "Ocorreu um erro ao reportar o problema. Tente novamente mais tarde.",
-                ephemeral=True
-            )
+        modal = ProblemReportModal(self.servico, self.servicos_config)
+        await interaction.response.send_modal(modal)
 
     def salvar_em_json(self):
         try:
