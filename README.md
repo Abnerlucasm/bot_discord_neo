@@ -5,12 +5,12 @@ Este é um bot do Discord para gerenciar e otimizar rotinas internas da Neo Sist
 
 ## Funcionalidades
 
-• 🔧 Gerenciamento inteligente de serviços
-• 👥 Sistema avançado de permissões
-• 🔔 Notificações em tempo real
-• ⚠️ Sistema de reporte de problemas
-• 📅 Gerenciamento de Agendamentos
-• 🔄 Controle de Atualizações
+- 🔧 **Gerenciamento inteligente de serviços**
+- 👥 **Sistema avançado de permissões**
+- 🔔 **Notificações em tempo real**
+- ⚠️ **Sistema de reporte de problemas**
+- 📅 **Gerenciamento de Agendamentos**
+- 🔄 **Controle de Atualizações**
 
 ## Requisitos
 
