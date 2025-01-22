@@ -11,9 +11,10 @@ EMOJI_CLIENTE_AGEND = "<:agendamento3:1327339980753735702>"
 EMOJI_CHAMADO_AGEND = "<:agendamento5:1327339984583397503>"  
 EMOJI_DATA_AGEND = "<:agendamento2:1327339979420209273>"  
 EMOJI_OBS_AGEND = "<:agendamento4:1327339982767263836>"          
-EMOJI_STATUS_AGEND = ""    
+EMOJI_STATUS_AGEND = "<:discotoolsxyzicon1:1331628487202705554>"    
 EMOJI_USER_AGEND = "<:agendamento3:1327339980753735702>"       
 EMOJI_VERSAO_AGEND = "📦"    
+
 
 EMOJI_CLIENTE_ATUALIZACAO = "<:atualizacao2:1327339988299415552>"  
 EMOJI_VERS_CORP_ATUALIZACAO = "<:atualzicao6:1327341654751051868>"  
@@ -22,29 +23,29 @@ EMOJI_VERS_CONT_ATUALIZACAO = "<:atualzicao6:1327341654751051868>"
 EMOJI_DATA_ATUALIZACAO = "<:atualizacao1:1327339986173038602>"  
 EMOJI_CHAMADOS_ATUALIZACAO = "<:atualizacao3:1327339990350303243>"  
 EMOJI_OBS_ATUALIZACAO = "💬"          
-EMOJI_STATUS_ATUALIZACAO = ""    
+# EMOJI_STATUS_ATUALIZACAO = "<:discotoolsxyzicon:1331628490419736657>"    
 EMOJI_USER_ATUALIZACAO = "<:atualizacao2:1327339988299415552>"       
 EMOJI_VERSAO_ATUALIZACAO = "<:atualzicao6:1327341654751051868>"  
 
 
+EMOJI_CLIENTE_99 = "<:discotoolsxyzicon1:1327343125928087622>"
+EMOJI_VERSAO_99 = "<:ver99:1327343131166900275>"
+EMOJI_DATA_99 = "<:discotoolsxyzicon3:1327343409148592188>"
+EMOJI_CHAMADOS_99 = "<:discotoolsxyzicon:1327343129753554944>"
+
+
 class StatusButton(discord.ui.Button):
-    def __init__(self, author_id: int):
+    def __init__(self):  # Remover author_id do __init__
         super().__init__(
             label="Status: Pendente",
             style=discord.ButtonStyle.danger,
             emoji="⏳"
         )
         self.status = "Pendente"
-        self.author_id = author_id
+        # Remover self.author_id = author_id
 
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.author_id:
-            await interaction.response.send_message(
-                "Apenas o autor original pode alterar o status.",
-                ephemeral=True
-            )
-            return
-
+        # Remover a verificação de autor que existia aqui
         if self.status == "Pendente":
             self.status = "Recebido"
             self.style = discord.ButtonStyle.success
@@ -105,11 +106,93 @@ class EditButton(discord.ui.Button):
         modal.author_id = self.author_id
         await interaction.response.send_modal(modal)
 
+class DeleteButton(discord.ui.Button):
+    def __init__(self, author_id: int):
+        super().__init__(label="Excluir", style=discord.ButtonStyle.danger, emoji="🗑️")
+        self.author_id = author_id
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "Apenas o autor original pode excluir esta mensagem.",
+                ephemeral=True
+            )
+            return
+        
+        await interaction.message.delete()
+        await interaction.response.send_message(
+            "Mensagem excluída com sucesso!",
+            ephemeral=True
+        )
+
 class CustomView(discord.ui.View):
     def __init__(self, modal_type: str, original_data: dict, author_id: int):
         super().__init__(timeout=None)
-        self.add_item(StatusButton(author_id))
+        if modal_type == "agendamento":  # Adicionar status button apenas para agendamento
+            self.add_item(StatusButton())
         self.add_item(EditButton(modal_type, original_data, author_id))
+        self.add_item(DeleteButton(author_id))  # Adicionar botão de delete
+        
+
+class Beta99Modal(discord.ui.Modal, title='Versão Beta 99'):
+    def __init__(self):
+        super().__init__()
+        self.message_to_edit = None
+
+    cliente = discord.ui.TextInput(
+        label='Cliente',
+        placeholder='Nome do cliente...',
+        required=True,
+    )
+    
+    versao = discord.ui.TextInput(
+        label='Versão',
+        placeholder='Ex: X.X.X.99XX',
+        required=True,
+    )
+
+    data = discord.ui.TextInput(
+        label='Data',
+        placeholder='DD/MM/YYYY',
+        required=True,
+    )
+    
+    chamados = discord.ui.TextInput(
+        label='Chamados',
+        placeholder='Liste os chamados separados por vírgula...',
+        style=discord.TextStyle.paragraph,
+        required=True,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            mensagem = [
+                "**VERSÃO BETA 99**",
+                f"**{EMOJI_CLIENTE_99} • Cliente:** {self.cliente}",
+                f"**{EMOJI_VERSAO_99} • Versão:** {self.versao}",
+                f"**{EMOJI_DATA_99} • Data:** {self.data}",
+                f"**{EMOJI_CHAMADOS_99} • Chamados:** {self.chamados}",
+                f"**{EMOJI_USER_AGEND} • Solicitado por:** <@{interaction.user.id}>"
+            ]
+
+            mensagem_final = '\n'.join(mensagem)
+            
+            channel = interaction.client.get_channel(CANAL_NOTIFICACOES)
+            if channel:
+                await channel.send(content=mensagem_final)
+                await interaction.response.send_message(
+                    "Versão beta registrada com sucesso!",
+                    ephemeral=True
+                )
+            else:
+                raise Exception("Canal não encontrado")
+
+        except Exception as e:
+            logging.error(f"Erro ao registrar versão beta: {str(e)}")
+            await interaction.response.send_message(
+                "Ocorreu um erro ao registrar a versão beta. Tente novamente mais tarde.",
+                ephemeral=True
+            )
 
 class AgendamentoModal(discord.ui.Modal, title='Agendamento'):
     def __init__(self):
@@ -271,7 +354,7 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
 
             mensagem.append(f"**{EMOJI_DATA_ATUALIZACAO} • Data:** {data_atual}")
             mensagem.append(f"**{EMOJI_CHAMADOS_ATUALIZACAO} • Chamados:** {self.chamados}")
-            mensagem.append(f"**{EMOJI_STATUS_ATUALIZACAO} • Status:** Pendente")
+            # mensagem.append(f"**{EMOJI_STATUS_ATUALIZACAO} • Status:** Pendente")
             mensagem.append(f"**{EMOJI_USER_ATUALIZACAO} • Lançado por:** <@{interaction.user.id}>")
 
             mensagem_final = '\n'.join(mensagem)
@@ -315,6 +398,22 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
 class ScheduleUpdateCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        
+        
+    @app_commands.command(
+    name="beta99",
+    description="Registra uma nova versão beta 99"
+)
+    async def beta99(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.send_modal(Beta99Modal())
+            logging.info(f"{interaction.user.name} abriu o modal de versão beta")
+        except Exception as e:
+            logging.error(f"Erro ao abrir modal de versão beta: {str(e)}")
+            await interaction.response.send_message(
+                "Ocorreu um erro ao abrir o formulário. Tente novamente mais tarde.",
+                ephemeral=True
+            )
 
     @app_commands.command(
         name="agendamento",
