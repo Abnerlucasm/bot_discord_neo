@@ -107,6 +107,32 @@ class HelpCog(commands.Cog):
                               "• Mencione correções de bugs importantes",
                         inline=False
                     )
+                    
+                elif comando == "beta99":
+                    embed = discord.Embed(
+                        title="🔄 Comando: /beta99",
+                        description="Registre e acompanhe atualizações de versão em acesso antecipado do sistema.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/beta99` e forneça os detalhes da versão e cliente da atualização:",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="ℹ️ Informações necessárias",
+                        value="• Nome do Cliente\n"
+                              "• Número da versão beta\n"
+                              "• Número do chamado onde houve a solicitação / motivo\n"
+                              "• Data de implementação",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Notas importantes",
+                        value="• Documente todas as alterações relevantes\n"
+                              "• Inclua instruções para usuários se necessário\n",
+                        inline=False
+                    )
 
                 elif comando == "sobre":
                     embed = discord.Embed(
@@ -162,6 +188,12 @@ class HelpCog(commands.Cog):
                 embed.add_field(
                     name="🔄 /atualizacao",
                     value="Mantenha tudo atualizado! Registre e acompanhe as atualizações de versão.",
+                    inline=False
+                )
+                
+                embed.add_field(
+                    name="🔄 /beta99",
+                    value="Registre os clientes que estão utilizando a versão 99 em acesso antecipado.",
                     inline=False
                 )
 
