@@ -7,6 +7,7 @@ import os
 from cogs.glassfish import GlassfishCog
 from cogs.help import HelpCog
 from cogs.schedule_update import ScheduleUpdateCog
+# from cogs.glassfish_gerenciador import GlassfishManagementCog
 
 # Configuração do sistema de log
 logging.basicConfig(
@@ -36,6 +37,7 @@ class Bot(commands.Bot):
         await self.add_cog(GlassfishCog(self))
         await self.add_cog(HelpCog(self))
         await self.add_cog(ScheduleUpdateCog(self))
+        # await self.add_cog(GlassfishManagementCog(self))
         
     async def on_ready(self):
         print(f'{self.user} está pronto!')
@@ -44,7 +46,7 @@ class Bot(commands.Bot):
         await self.tree.sync()
         print("Comandos sincronizados globalmente.")
         logging.info("Comandos sincronizados globalmente com sucesso")
-
+          
 def main():
     try:
         with open("token.txt", "r") as file:

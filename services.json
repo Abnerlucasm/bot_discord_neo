@@ -1,93 +1,218 @@
 {
     "247 - 1": {
-        "nome": "Glassfish 247 - Instância 1",
-        "status": "disponível",
+        "nome": "Glassfish 247 - Domain: Neosistemas - Port: 4848",
+        "status": "dispon\u00edvel",
         "usuario": null,
-        "grupos_permitidos": ["994300483348996176", "994341371634782279"]
+        "grupos_permitidos": [
+            "994300483348996176",
+            "994341371634782279",
+            "994299965323091968"
+        ]
     },
     "247 - 2": {
-        "nome": "Glassfish 247 - Instância 2",
-        "status": "disponível",
+        "nome": "Glassfish 247 - Inst\u00e2ncia 2",
+        "status": "dispon\u00edvel",
         "usuario": null,
-        "grupos_permitidos": ["994300483348996176", "994341371634782279"]
+        "grupos_permitidos": [
+            "994300483348996176",
+            "994341371634782279",
+            "994299965323091968"
+        ]
     },
     "247 - 3": {
-        "nome": "Glassfish 247 - Instância 3",
-        "status": "disponível",
+        "nome": "Glassfish 247 - Inst\u00e2ncia 3",
+        "status": "dispon\u00edvel",
         "usuario": null,
-        "grupos_permitidos": ["994300483348996176", "994341371634782279"]
+        "grupos_permitidos": [
+            "994300483348996176",
+            "994341371634782279",
+            "994299965323091968"
+        ]
     },
     "248 - 1": {
-        "nome": "Glassfish 248 - Instância 1",
-        "status": "disponível",
-        "usuario": null,
-        "grupos_permitidos": ["994300483348996176", "994341371634782279"]
+        "nome": "Glassfish 248 - Domain: Neosistemas - Port: 4848",
+        "status": "em uso",
+        "usuario": "kaykyneosistemas",
+        "grupos_permitidos": [
+            "994300483348996176",
+            "994341371634782279",
+            "994299965323091968"
+        ]
     },
     "248 - 2": {
-        "nome": "Glassfish 248 - Instância 2",
-        "status": "disponível",
+        "nome": "Glassfish 248 - Domain: Neosistemas2 - Port: 24848",
+        "status": "dispon\u00edvel",
         "usuario": null,
-        "grupos_permitidos": ["994300483348996176", "994341371634782279"]
+        "grupos_permitidos": [
+            "994300483348996176",
+            "994341371634782279",
+            "994299965323091968"
+        ]
     },
     "248 - 3": {
-        "nome": "Glassfish 248 - Instância 3",
-        "status": "disponível",
+        "nome": "Glassfish 248 - Domain: Neosistemas3 - Port: 34848",
+        "status": "dispon\u00edvel",
         "usuario": null,
-        "grupos_permitidos": ["994300483348996176", "994341371634782279"]
+        "grupos_permitidos": [
+            "994300483348996176",
+            "994341371634782279",
+            "994299965323091968"
+        ]
     },
     "249 - 1": {
-        "nome": "Glassfish 249 - Instância 1",
-        "status": "disponível",
-        "usuario": null,
-        "grupos_permitidos": ["994341371634782279"]
+        "nome": "Glassfish 249 - Domain: Neosistemas - Port: 4848",
+        "status": "em uso",
+        "usuario": "matheusneo_38621",
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994300483348996176",
+            "994299965323091968"
+        ]
     },
     "249 - 2": {
-        "nome": "Glassfish 249 - Instância 2",
-        "status": "disponível",
+        "nome": "Glassfish 249 - Domain: Neosistemas2 - Port: 24848",
+        "status": "dispon\u00edvel",
         "usuario": null,
-        "grupos_permitidos": ["994341371634782279"]
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994300483348996176",
+            "994299965323091968"
+        ]
     },
     "249 - 3": {
-        "nome": "Glassfish 249 - Instância 3",
-        "status": "disponível",
-        "usuario": null,
-        "grupos_permitidos": ["994341371634782279"]
+        "nome": "Glassfish 249 - Domain: Neosistemas3 - Port: 34848",
+        "status": "em uso",
+        "usuario": "izaura5112",
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994300483348996176",
+            "994299965323091968"
+        ]
     },
     "40 - 1": {
-        "nome": "Glassfish 40 - Instância 1",
-        "status": "disponível",
-        "usuario": null,
-        "grupos_permitidos": ["994341371634782279"]
+        "nome": "Glassfish 40 - Domain: Neosistemas - Port: 4848",
+        "status": "em uso",
+        "usuario": "kaykyneosistemas",
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994299965323091968"
+        ],
+        "base_dir": {
+            "linux": "/srv/glassfish6.2.5/glassfish/bin"
+        },
+        "ssh": {
+            "host": "192.168.1.40",
+            "username": "neo",
+            "password": "09042003",
+            "sudo_password": "09042003"
+        },
+        "domain_name": "neosistemas"
     },
     "40 - 2": {
-        "nome": "Glassfish 40 - Instância 2",
-        "status": "disponível",
+        "nome": "Glassfish 40 - Domain: Neosistemas1 - Port: 14848",
+        "status": "dispon\u00edvel",
         "usuario": null,
-        "grupos_permitidos": ["994341371634782279"]
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994299965323091968"
+        ],
+        "base_dir": {
+            "linux": "/srv/glassfish6.2.5/glassfish/bin"
+        },
+        "ssh": {
+            "host": "192.168.1.40",
+            "username": "neo",
+            "password": "09042003"
+        },
+        "domain_name": "neosistemas1"
     },
     "40 - 3": {
-        "nome": "Glassfish 40 - Instância 3",
-        "status": "disponível",
+        "nome": "Glassfish 40 - Domain: Neosistemas2 - Port: 24848",
+        "status": "dispon\u00edvel",
         "usuario": null,
-        "grupos_permitidos": ["994341371634782279"]
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994299965323091968",
+            "994300073536139315"
+        ],
+        "base_dir": {
+            "linux": "/srv/glassfish6.2.5/glassfish/bin"
+        },
+        "ssh": {
+            "host": "192.168.1.40",
+            "username": "neo",
+            "password": "09042003"
+        },
+        "domain_name": "neosistemas2Guto"
+    },
+    "40 - 4": {
+        "nome": "Glassfish 40 - Domain: Neosistemas3 - Port: 34848",
+        "status": "dispon\u00edvel",
+        "usuario": null,
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994299965323091968",
+            "994300073536139315"
+        ]
+    },
+    "14 - 2": {
+        "nome": "Glassfish 14 - Domain: homologacao 01 - Port: 7001",
+        "status": "em uso",
+        "usuario": null,
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994299965323091968",
+            "994300073536139315"
+        ],
+        "base_dir": {
+            "linux": "/srv/glassfish6.2.5/glassfish/bin"
+        },
+        "ssh": {
+            "host": "192.168.1.14",
+            "username": "neo",
+            "password": "09042003",
+            "sudo_password": "09042003"
+        },
+        "domain_name": "neosistemas1"
+    },
+    "14 - 3": {
+        "nome": "Glassfish 14 - Domain: homologacao 02 - Port: 7002",
+        "status": "em uso",
+        "usuario": "murilosombrio.neosistemas",
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994299965323091968",
+            "994300073536139315"
+        ]
     },
     "14 - 1": {
-        "nome": "Glassfish 14 - Instância 1",
-        "status": "disponível",
-        "usuario": null,
-        "grupos_permitidos": ["994341371634782279"]
+        "nome": "Glassfish 14 - Domain: Neosistemas - Port: 4848",
+        "status": "em uso",
+        "usuario": "murilosombrio.neosistemas",
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994299965323091968",
+            "994300073536139315"
+        ]
     },
-    "224 - 1": {
-        "nome": "Glassfish 224 - Instância 1",
-        "status": "disponível",
-        "usuario": null,
-        "grupos_permitidos": ["994300483348996176", "994341371634782279"]
-    }
-    ,
     "72 - 1": {
-        "nome": "Glassfish 72 - Instância 1",
-        "status": "disponível",
+        "nome": "Glassfish 72 - Domain: Neosistemas - Port: 4848",
+        "status": "dispon\u00edvel",
         "usuario": null,
-        "grupos_permitidos": ["994341371634782279"]
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994299965323091968",
+            "994300073536139315"
+        ]
+    },
+    "97 - 1": {
+        "nome": "Glassfish 97 - Domain: Neosistemas - Port: 4848",
+        "status": "dispon\u00edvel",
+        "usuario": null,
+        "grupos_permitidos": [
+            "994341371634782279",
+            "994299965323091968",
+            "994300073536139315"
+        ]
     }
 }

@@ -32,35 +32,42 @@ EMOJI_CLIENTE_99 = "<:discotoolsxyzicon1:1327343125928087622>"
 EMOJI_VERSAO_99 = "<:ver99:1327343131166900275>"
 EMOJI_DATA_99 = "<:discotoolsxyzicon3:1327343409148592188>"
 EMOJI_CHAMADOS_99 = "<:discotoolsxyzicon:1327343129753554944>"
-
+EMOJI_USER_99 = "<:discotoolsxyzicon1:1327343125928087622>"
 
 class StatusButton(discord.ui.Button):
-    def __init__(self):  # Remover author_id do __init__
+    def __init__(self):
         super().__init__(
-            label="Status: Pendente",
+            label="Pendente",
             style=discord.ButtonStyle.danger,
             emoji="⏳"
         )
         self.status = "Pendente"
-        # Remover self.author_id = author_id
 
     async def callback(self, interaction: discord.Interaction):
-        # Remover a verificação de autor que existia aqui
         if self.status == "Pendente":
             self.status = "Recebido"
             self.style = discord.ButtonStyle.success
-            self.label = "Status: Recebido"
+            self.label = "Recebido"
             self.emoji = "✅"
         else:
             self.status = "Pendente"
             self.style = discord.ButtonStyle.danger
-            self.label = "Status: Pendente"
+            self.label = "Pendente"
             self.emoji = "⏳"
 
         content_lines = interaction.message.content.split('\n')
-        status_line = f"**{EMOJI_STATUS_AGEND} • Status:** {self.status}"
-        status_found = False
         
+        # Verifica se já está agendado
+        is_agendado = any("Data Confirmada:" in line for line in content_lines)
+        status_complement = "Agendado" if is_agendado else (
+            "Aguardando Agendamento" if self.status == "Recebido" else "Aguardando Recebimento"
+        )
+        
+        # Adiciona informação de quem recebeu
+        recebido_por = f" por <@{interaction.user.id}>" if self.status == "Recebido" else ""
+        status_line = f"**{EMOJI_STATUS_AGEND} • Status: **{self.status}{recebido_por} | {status_complement}"
+        
+        status_found = False
         for i, line in enumerate(content_lines):
             if "**• Status:**" in line:
                 content_lines[i] = status_line
@@ -94,13 +101,13 @@ class EditButton(discord.ui.Button):
             modal.chamado.default = self.original_data.get("chamado", "")
             modal.data_agendamento.default = self.original_data.get("data_agendamento", "")
             modal.observacao.default = self.original_data.get("observacao", "")
+            modal.cargo.default = self.original_data.get("cargo", "")
         else:
             modal = AtualizacaoModal()
             modal.cliente.default = self.original_data.get("cliente", "")
-            modal.versao_neocorp.default = self.original_data.get("versao_neocorp", "")
-            modal.versao_neoweb.default = self.original_data.get("versao_neoweb", "")
-            modal.versao_neocontabil.default = self.original_data.get("versao_neocontabil", "")
+            modal.versoes.default = self.original_data.get("versoes", "")
             modal.chamados.default = self.original_data.get("chamados", "")
+            modal.data_atualizacao.default = self.original_data.get("data_atualizacao", "")
 
         modal.message_to_edit = interaction.message
         modal.author_id = self.author_id
@@ -125,13 +132,143 @@ class DeleteButton(discord.ui.Button):
             ephemeral=True
         )
 
+class ConfirmarButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(
+            label="Confirmar Agendamento",
+            style=discord.ButtonStyle.primary,
+            emoji="📅"
+        )
+        self.is_confirmed = False
+
+    async def callback(self, interaction: discord.Interaction):
+        if not self.is_confirmed:
+            modal = ConfirmarAgendamentoModal()
+            modal.message = interaction.message  # Passa a mensagem para o modal
+            modal.view = self.view  # Passa a view para o modal
+            await interaction.response.send_modal(modal)
+        else:
+            # Cancelar confirmação
+            content_lines = interaction.message.content.split('\n')
+            new_lines = []
+            
+            for line in content_lines:
+                if "• Data Confirmada:" in line:
+                    # Converte data confirmada para prevista
+                    data = line.split("Data Confirmada:")[1].strip()
+                    new_lines.append(f"**{EMOJI_DATA_AGEND} • Data Prevista:** {data}")
+                elif "**• Status:**" in line:
+                    # Mantém o status de recebimento mas remove o "Agendado"
+                    if "Recebido" in line:
+                        new_lines.append(f"**{EMOJI_STATUS_AGEND} • Status:** Recebido por <@{interaction.user.id}> | Aguardando Agendamento")
+                    else:
+                        new_lines.append(f"**{EMOJI_STATUS_AGEND} • Status:** Pendente | Aguardando Recebimento")
+                elif "🎯 **AGENDAMENTO CONFIRMADO**" in line:
+                    continue  # Remove a linha de destaque
+                else:
+                    new_lines.append(line)
+
+            self.is_confirmed = False
+            self.label = "Confirmar Agendamento"
+            self.style = discord.ButtonStyle.primary
+            
+            await interaction.message.edit(content='\n'.join(new_lines), view=self.view)
+            await interaction.response.send_message("Confirmação de agendamento cancelada!", ephemeral=True)
+
+class ConfirmarAgendamentoModal(discord.ui.Modal, title='Confirmar Agendamento'):
+    def __init__(self):
+        super().__init__()
+        self.message = None
+        self.view = None
+        
+    data_hora = discord.ui.TextInput(
+        label='Data e Hora do Agendamento',
+        placeholder='DD/MM/YYYY HH:MM',
+        default=(datetime.now().replace(hour=12, minute=0)).strftime('%d/%m/%Y %H:%M'),
+        required=True,
+    )
+
+    observacao = discord.ui.TextInput(
+        label='Observação',
+        placeholder='Observação opcional sobre a confirmação...',
+        style=discord.TextStyle.paragraph,
+        required=False,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            datetime.strptime(self.data_hora.value.strip(), '%d/%m/%Y %H:%M')
+            
+            content_lines = self.message.content.split('\n')
+            new_lines = []
+            
+            # Adiciona destaque do agendamento confirmado
+            new_lines.append("**AGENDAMENTO**")
+            new_lines.append("🎯 **AGENDAMENTO CONFIRMADO** 🎯")
+            
+            data_line = f"**{EMOJI_DATA_AGEND} • Data Confirmada:** {self.data_hora.value}"
+            data_found = False
+            recebido_por = None
+            obs_found = False
+            
+            for line in content_lines[1:]:  # Pula o título
+                if "• Data Prevista:" in line or "• Data Confirmada:" in line:
+                    new_lines.append(data_line)
+                    data_found = True
+                elif "**• Status:**" in line:
+                    if "Recebido por" in line:
+                        recebido_por = line.split("Recebido por")[1].split("|")[0].strip()
+                    
+                    if recebido_por:
+                        new_lines.append(f"**{EMOJI_STATUS_AGEND} • Status:** Recebido por {recebido_por} | Agendado")
+                    else:
+                        new_lines.append(f"**{EMOJI_STATUS_AGEND} • Status:** Recebido por <@{interaction.user.id}> | Agendado")
+                elif "• Observação:" in line:
+                    if self.observacao.value and self.observacao.value.strip():
+                        new_lines.append(f"**{EMOJI_OBS_AGEND} • Observação:** {line.split('Observação:')[1].strip()}\n**{EMOJI_OBS_AGEND} • Observação da Confirmação:** {self.observacao.value}")
+                    else:
+                        new_lines.append(line)
+                    obs_found = True
+                else:
+                    new_lines.append(line)
+            
+            if not data_found:
+                new_lines.insert(-1, data_line)
+
+            # Adiciona observação da confirmação se não existir observação anterior
+            if not obs_found and self.observacao.value and self.observacao.value.strip():
+                new_lines.insert(-1, f"**{EMOJI_OBS_AGEND} • Observação da Confirmação:** Confirmado por {self.observacao.value}")
+
+            # Atualiza o botão
+            for item in self.view.children:
+                if isinstance(item, ConfirmarButton):
+                    item.is_confirmed = True
+                    item.label = "Cancelar Confirmação"
+                    item.style = discord.ButtonStyle.danger
+
+            await self.message.edit(content='\n'.join(new_lines), view=self.view)
+            await interaction.response.send_message("Agendamento confirmado com sucesso!", ephemeral=True)
+            
+        except ValueError:
+            await interaction.response.send_message(
+                "Formato de data inválido. Use DD/MM/YYYY HH:MM",
+                ephemeral=True
+            )
+        except Exception as e:
+            logging.error(f"Erro ao confirmar agendamento: {str(e)}")
+            await interaction.response.send_message(
+                "Ocorreu um erro ao confirmar o agendamento. Tente novamente mais tarde.",
+                ephemeral=True
+            )
+
 class CustomView(discord.ui.View):
     def __init__(self, modal_type: str, original_data: dict, author_id: int):
         super().__init__(timeout=None)
-        if modal_type == "agendamento":  # Adicionar status button apenas para agendamento
+        if modal_type == "agendamento":
             self.add_item(StatusButton())
+            self.add_item(ConfirmarButton())  # Adicionar o novo botão
         self.add_item(EditButton(modal_type, original_data, author_id))
-        self.add_item(DeleteButton(author_id))  # Adicionar botão de delete
+        self.add_item(DeleteButton(author_id))
         
 
 class Beta99Modal(discord.ui.Modal, title='Versão Beta 99'):
@@ -172,7 +309,7 @@ class Beta99Modal(discord.ui.Modal, title='Versão Beta 99'):
                 f"**{EMOJI_VERSAO_99} • Versão:** {self.versao}",
                 f"**{EMOJI_DATA_99} • Data:** {self.data}",
                 f"**{EMOJI_CHAMADOS_99} • Chamados:** {self.chamados}",
-                f"**{EMOJI_USER_AGEND} • Solicitado por:** <@{interaction.user.id}>"
+                f"**{EMOJI_USER_99} • Lançado por:** <@{interaction.user.id}>"
             ]
 
             mensagem_final = '\n'.join(mensagem)
@@ -213,8 +350,9 @@ class AgendamentoModal(discord.ui.Modal, title='Agendamento'):
     )
     
     data_agendamento = discord.ui.TextInput(
-        label='Data Agendamento',
+        label='Data Prevista',
         placeholder='DD/MM/YYYY HH:MM',
+        default=(datetime.now().replace(hour=12, minute=0)).strftime('%d/%m/%Y %H:%M'),
         required=False,
     )
     
@@ -225,6 +363,13 @@ class AgendamentoModal(discord.ui.Modal, title='Agendamento'):
         required=False,
     )
     
+    cargo = discord.ui.TextInput(
+        label='Cargo para Notificar',
+        placeholder='Digite @ ou ID do cargo (opcional)',
+        default='@Suporte',
+        required=False,
+    )
+
     async def on_submit(self, interaction: discord.Interaction):
         try:
             data_valida = True
@@ -247,20 +392,37 @@ class AgendamentoModal(discord.ui.Modal, title='Agendamento'):
             # Formatação da mensagem usando as constantes de emoji
             mensagem = [
                 "**AGENDAMENTO**",
-                f"**{EMOJI_CLIENTE_AGEND} • Cliente:** {self.cliente.value}",
             ]
+
+            # Adiciona menção do cargo se foi fornecido
+            if self.cargo.value and self.cargo.value.strip():
+                # Tenta encontrar o cargo pelo ID ou nome
+                cargo_valor = self.cargo.value.strip()
+                if cargo_valor.isdigit():
+                    cargo = interaction.guild.get_role(int(cargo_valor))
+                else:
+                    # Remove @ e espaços se houver
+                    cargo_nome = cargo_valor.replace('@', '').strip()
+                    cargo = discord.utils.get(interaction.guild.roles, name=cargo_nome)
+                
+                if cargo:
+                    mensagem.append(f"{cargo.mention}")
+                
+            mensagem.extend([
+                f"**{EMOJI_CLIENTE_AGEND} • Cliente:** {self.cliente.value}",
+            ])
 
             if self.chamado.value and self.chamado.value.strip():
                 mensagem.append(f"**{EMOJI_CHAMADO_AGEND} • Chamado:** {self.chamado.value}")
 
             if self.data_agendamento.value and self.data_agendamento.value.strip():
-                mensagem.append(f"**{EMOJI_DATA_AGEND} • Data Agendamento:** {self.data_agendamento.value}")
+                mensagem.append(f"**{EMOJI_DATA_AGEND} • Data Prevista:** {self.data_agendamento.value}")
             
             if self.observacao.value and self.observacao.value.strip():
                 mensagem.append(f"**{EMOJI_OBS_AGEND} • Observação:** {self.observacao.value}")
 
-            mensagem.append(f"**{EMOJI_STATUS_AGEND} • Status:** Pendente")
-            mensagem.append(f"**{EMOJI_USER_AGEND} • Solicitado por:** <@{author_id}>")
+            mensagem.append(f"**{EMOJI_STATUS_AGEND} • Status: **Pendente | Aguardando Recebimento")
+            mensagem.append(f"**{EMOJI_USER_AGEND} • Solicitado por: **<@{author_id}>")
 
             mensagem_final = '\n'.join(mensagem)
 
@@ -269,6 +431,7 @@ class AgendamentoModal(discord.ui.Modal, title='Agendamento'):
                 "chamado": self.chamado.value,
                 "data_agendamento": self.data_agendamento.value,
                 "observacao": self.observacao.value,
+                "cargo": self.cargo.value,  # Adiciona cargo aos dados originais
             }
             
             view = CustomView("agendamento", original_data, author_id)
@@ -310,61 +473,89 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
         placeholder='Nome do cliente...',
         required=True,
     )
-    
-    versao_neocorp = discord.ui.TextInput(
-        label='Versão NeoCorp',
-        placeholder='Ex: X.XX.XX',
+
+    versoes = discord.ui.TextInput(
+        label='Versões',
+        placeholder='Preencha as versões após cada título',
+        default='NeoCorp: \nNeoWeb: \nNeoContábil: ',
         required=True,
+        style=discord.TextStyle.paragraph,
     )
-    
-    versao_neoweb = discord.ui.TextInput(
-        label='Versão NeoWeb',
-        placeholder='Ex: X.XX.XX',
-        required=False,
-    )
-    
-    versao_neocontabil = discord.ui.TextInput(
-        label='Versão NeoContabil',
-        placeholder='Ex: X.XX.XX',
-        required=False,
-    )
-    
+
     chamados = discord.ui.TextInput(
         label='Chamados',
-        placeholder='Liste os chamados separados por vírgula...',
+        placeholder='Números dos chamados...',
+        required=False,
         style=discord.TextStyle.paragraph,
+    )
+
+    data_atualizacao = discord.ui.TextInput(
+        label='Data',
+        placeholder='DD/MM/YYYY',
+        default=datetime.now().strftime('%d/%m/%Y'),
         required=True,
     )
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            data_atual = datetime.now().strftime('%d/%m/%Y')
+            # Verifica se a data é válida, se fornecida
+            data_valida = True
+            if self.data_atualizacao.value and self.data_atualizacao.value.strip():
+                try:
+                    datetime.strptime(self.data_atualizacao.value.strip(), '%d/%m/%Y')
+                except ValueError:
+                    data_valida = False
+                    await interaction.response.send_message(
+                        "Formato de data inválido. Use DD/MM/YYYY",
+                        ephemeral=True
+                    )
+                    return
+
+            if not data_valida:
+                return
+
+            # Processa o campo de versões (atualizado para lidar com quebras de linha)
+            versoes_texto = self.versoes.value.strip()
+            versao_neocorp = ""
+            versao_neoweb = ""
+            versao_neocontabil = ""
+
+            # Tenta extrair as versões do texto (agora suporta tanto | quanto quebras de linha)
+            for linha in versoes_texto.replace('|', '\n').split('\n'):
+                linha = linha.strip()
+                if "NeoCorp:" in linha:
+                    versao_neocorp = linha.split("NeoCorp:")[1].strip()
+                elif "NeoWeb:" in linha:
+                    versao_neoweb = linha.split("NeoWeb:")[1].strip()
+                elif "NeoContábil:" in linha:
+                    versao_neocontabil = linha.split("NeoContábil:")[1].strip()
+
+            # Usa a data fornecida ou a data atual
+            data = self.data_atualizacao.value.strip() if self.data_atualizacao.value and self.data_atualizacao.value.strip() else datetime.now().strftime('%d/%m/%Y')
 
             mensagem = [
                 "**ATUALIZAÇÃO**",
-                f"**{EMOJI_CLIENTE_ATUALIZACAO} • Cliente:** {self.cliente}",
-                f"**{EMOJI_VERS_CORP_ATUALIZACAO} • Versão NeoCorp:** {self.versao_neocorp}"
+                f"**{EMOJI_CLIENTE_ATUALIZACAO} • Cliente:** {self.cliente.value}",
+                f"**{EMOJI_VERS_CORP_ATUALIZACAO} • Versão NeoCorp:** {versao_neocorp}",
             ]
 
-            if self.versao_neoweb.value and self.versao_neoweb.value.strip():
-                mensagem.append(f"**{EMOJI_VERS_WEB_ATUALIZACAO} •Versão NeoWeb:** {self.versao_neoweb}")
+            if versao_neoweb:
+                mensagem.append(f"**{EMOJI_VERS_WEB_ATUALIZACAO} • Versão NeoWeb:** {versao_neoweb}")
+            if versao_neocontabil:
+                mensagem.append(f"**{EMOJI_VERS_CONT_ATUALIZACAO} • Versão NeoContábil:** {versao_neocontabil}")
+            if self.chamados.value and self.chamados.value.strip():
+                mensagem.append(f"**{EMOJI_CHAMADOS_ATUALIZACAO} • Chamados:** {self.chamados.value}")
 
-            if self.versao_neocontabil.value and self.versao_neocontabil.value.strip():
-                mensagem.append(f"**{EMOJI_VERS_CONT_ATUALIZACAO} • Versão NeoContabil:** {self.versao_neocontabil}")
-
-            mensagem.append(f"**{EMOJI_DATA_ATUALIZACAO} • Data:** {data_atual}")
-            mensagem.append(f"**{EMOJI_CHAMADOS_ATUALIZACAO} • Chamados:** {self.chamados}")
-            # mensagem.append(f"**{EMOJI_STATUS_ATUALIZACAO} • Status:** Pendente")
-            mensagem.append(f"**{EMOJI_USER_ATUALIZACAO} • Lançado por:** <@{interaction.user.id}>")
+            mensagem.append(f"**{EMOJI_DATA_ATUALIZACAO} • Data:** {data}")
+            mensagem.append(f"**{EMOJI_USER_ATUALIZACAO} • Atualizado por:** <@{interaction.user.id}>")
 
             mensagem_final = '\n'.join(mensagem)
 
             original_data = {
-                "cliente": str(self.cliente),
-                "versao_neocorp": str(self.versao_neocorp),
-                "versao_neoweb": str(self.versao_neoweb),
-                "versao_neocontabil": str(self.versao_neocontabil),
-                "chamados": str(self.chamados),
+                "cliente": self.cliente.value,
+                "versoes": self.versoes.value,
+                "chamados": self.chamados.value,
+                "data_atualizacao": data,
             }
 
             view = CustomView("atualizacao", original_data, interaction.user.id)
