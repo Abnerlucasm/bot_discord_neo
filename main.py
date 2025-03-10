@@ -8,13 +8,32 @@ from cogs.glassfish import GlassfishCog
 from cogs.help import HelpCog
 from cogs.schedule_update import ScheduleUpdateCog
 # from cogs.glassfish_gerenciador import GlassfishManagementCog
+from datetime import datetime
+from logging.handlers import TimedRotatingFileHandler
+
+# Criar pasta logs se não existir
+if not os.path.exists('logs'):
+    os.makedirs('logs')
 
 # Configuração do sistema de log
-logging.basicConfig(
-    filename="glassfish.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
+log_file = os.path.join('logs', 'bot.log')
+handler = TimedRotatingFileHandler(
+    filename=log_file,
+    when='midnight',
+    interval=1,
+    backupCount=30,  # Mantém logs dos últimos 30 dias
+    encoding='utf-8'
 )
+handler.suffix = '%Y-%m-%d.log'  # Formato do arquivo: bot.2024-02-21.log
+
+# Formato do log
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+
+# Configuração do logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
 
 class Bot(commands.Bot):
     def __init__(self):
