@@ -1,14 +1,16 @@
 
 # Bot Discord Neo
 
-Este é um bot do Discord para gerenciar serviços em um servidor, permitindo que os usuários reservem e liberem serviços de acordo com suas permissões.
+Este é um bot do Discord para gerenciar e otimizar rotinas internas da Neo Sistemas.
 
 ## Funcionalidades
 
-- **Visualização e seleção de serviços**: Usuários podem visualizar serviços disponíveis com base nos cargos que possuem no Discord.
-- **Reservar serviço**: Usuários podem reservar serviços disponíveis para usá-los.
-- **Liberar serviço**: Usuários podem liberar serviços reservados, permitindo que outros os utilizem.
-- **Notificações**: O bot envia notificações para um canal específico sempre que um serviço é reservado ou liberado.
+- 🔧 **Gerenciamento inteligente de serviços**
+- 👥 **Sistema avançado de permissões**
+- 🔔 **Notificações em tempo real**
+- ⚠️ **Sistema de reporte de problemas**
+- 📅 **Gerenciamento de Agendamentos**
+- 🔄 **Controle de Atualizações**
 
 ## Requisitos
 
