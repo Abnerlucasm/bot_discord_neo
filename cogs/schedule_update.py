@@ -468,6 +468,7 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
         super().__init__()
         self.message_to_edit = None
         self.author_id = None
+        self.selected_users = []  # Lista para armazenar os usuários selecionados
 
     cliente = discord.ui.TextInput(
         label='Cliente',
@@ -495,12 +496,6 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
         placeholder='DD/MM/YYYY',
         default=datetime.now().strftime('%d/%m/%Y'),
         required=True,
-    )
-
-    responsaveis = discord.ui.TextInput(
-        label='Responsáveis',
-        placeholder='Mencione os responsáveis separados por vírgula (ex: @user1, @user2)',
-        required=False,
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -556,32 +551,12 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
             mensagem.append(f"**{EMOJI_DATA_ATUALIZACAO} • Data:** {data}")
 
             # Processa os responsáveis
-            responsaveis_texto = ""
-            if self.responsaveis.value and self.responsaveis.value.strip():
-                # Adiciona o usuário atual como primeiro responsável
-                responsaveis_texto = f"<@{interaction.user.id}>"
-                
-                # Processa os outros responsáveis
-                outros_responsaveis = [r.strip() for r in self.responsaveis.value.split(',')]
-                for responsavel in outros_responsaveis:
-                    if responsavel:  # Ignora strings vazias
-                        # Se for uma menção (@user), mantém como está
-                        if responsavel.startswith('<@') and responsavel.endswith('>'):
-                            responsaveis_texto += f", {responsavel}"
-                        # Se for um ID, adiciona a formatação de menção
-                        elif responsavel.isdigit():
-                            responsaveis_texto += f", <@{responsavel}>"
-                        # Se for um nome de usuário, tenta encontrar o ID
-                        else:
-                            # Remove @ se existir
-                            username = responsavel.replace('@', '').strip()
-                            # Tenta encontrar o membro pelo nome
-                            member = discord.utils.get(interaction.guild.members, name=username)
-                            if member:
-                                responsaveis_texto += f", <@{member.id}>"
-            else:
-                # Se não houver outros responsáveis, usa apenas o usuário atual
-                responsaveis_texto = f"<@{interaction.user.id}>"
+            responsaveis_texto = f"<@{interaction.user.id}>"  # Sempre inclui o usuário atual
+            
+            # Adiciona os usuários selecionados
+            for user in self.selected_users:
+                if user.id != interaction.user.id:  # Evita duplicar o usuário atual
+                    responsaveis_texto += f", <@{user.id}>"
 
             mensagem.append(f"**{EMOJI_USER_ATUALIZACAO} • Atualizado por:** {responsaveis_texto}")
 
@@ -592,7 +567,7 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
                 "versoes": self.versoes.value,
                 "chamados": self.chamados.value,
                 "data_atualizacao": data,
-                "responsaveis": self.responsaveis.value,
+                "responsaveis": [user.id for user in self.selected_users],
             }
 
             view = CustomView("atualizacao", original_data, interaction.user.id)
@@ -622,6 +597,93 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
                 "Ocorreu um erro ao registrar a atualização. Tente novamente mais tarde.",
                 ephemeral=True
             )
+
+class ConfirmButton(discord.ui.Button):
+    def __init__(self, modal: AtualizacaoModal):
+        super().__init__(
+            label="Continuar",
+            style=discord.ButtonStyle.green,
+            emoji="➡️"
+        )
+        self.modal = modal
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(self.modal)
+
+class SimButton(discord.ui.Button):
+    def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
+        super().__init__(
+            label="Sim",
+            style=discord.ButtonStyle.green,
+            emoji="✅"
+        )
+        self.modal = modal
+        self.current_user = current_user
+
+    async def callback(self, interaction: discord.Interaction):
+        view = AtualizacaoView(self.modal, self.current_user)
+        await interaction.response.edit_message(
+            content="**1ª Etapa: Selecione os responsáveis adicionais:**\n\n"
+                   "**⚠️ IMPORTANTE ⚠️**\n"
+                   "**Você já está listado como responsável principal desta atualização!**\n\n"
+                   "Use o menu abaixo para selecionar **outros responsáveis** pela atualização.\n"
+                   "Após selecionar, clique no botão 'Continuar' para abrir o formulário de atualização.",
+            view=view
+        )
+
+class NaoButton(discord.ui.Button):
+    def __init__(self, modal: AtualizacaoModal):
+        super().__init__(
+            label="Não",
+            style=discord.ButtonStyle.red,
+            emoji="❌"
+        )
+        self.modal = modal
+
+    async def callback(self, interaction: discord.Interaction):
+        # Define apenas o usuário atual como responsável
+        self.modal.selected_users = [interaction.user]
+        await interaction.response.send_modal(self.modal)
+
+class InicialView(discord.ui.View):
+    def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
+        super().__init__(timeout=None)
+        self.modal = modal
+        self.add_item(SimButton(modal, current_user))
+        self.add_item(NaoButton(modal))
+
+class AtualizacaoView(discord.ui.View):
+    def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
+        super().__init__(timeout=None)
+        self.modal = modal
+        self.add_item(ResponsaveisSelect(modal, current_user))
+        self.add_item(ConfirmButton(modal))
+
+class ResponsaveisSelect(discord.ui.UserSelect):
+    def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
+        super().__init__(
+            placeholder="Selecione os responsáveis adicionais...",
+            min_values=0,
+            max_values=25
+        )
+        self.modal = modal
+        self.current_user = current_user
+
+    async def callback(self, interaction: discord.Interaction):
+        # Filtra o usuário atual da lista de selecionados
+        selected_users = [user for user in self.values if user.id != self.current_user.id]
+        self.modal.selected_users = selected_users
+        
+        # Atualiza a mensagem com os usuários selecionados
+        selected_users_text = "\n".join([f"- {user.mention}" for user in selected_users]) if selected_users else "Nenhum responsável adicional selecionado"
+        await interaction.response.edit_message(
+            content=f"**1ª Etapa: Selecione os responsáveis adicionais:**\n\n"
+                   f"**⚠️ IMPORTANTE ⚠️**\n"
+                   f"**Você já está listado como responsável principal desta atualização!**\n\n"
+                   f"Responsáveis adicionais selecionados:\n{selected_users_text}\n\n"
+                   f"Clique no botão 'Continuar' quando terminar a seleção.",
+            view=self.view
+        )
 
 class ScheduleUpdateCog(commands.Cog):
     def __init__(self, bot):
@@ -672,7 +734,16 @@ class ScheduleUpdateCog(commands.Cog):
     )
     async def atualizacao(self, interaction: discord.Interaction):
         try:
-            await interaction.response.send_modal(AtualizacaoModal())
+            modal = AtualizacaoModal()
+            view = InicialView(modal, interaction.user)
+            
+            await interaction.response.send_message(
+                "**1ª Etapa: Seleção de Responsáveis**\n"
+                "A atualização possui mais de um responsável?",
+                view=view,
+                ephemeral=True
+            )
+            
             logging.info(f"{interaction.user.name} abriu o modal de atualização")
         except discord.NotFound:
             try:
