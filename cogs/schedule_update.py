@@ -108,6 +108,7 @@ class EditButton(discord.ui.Button):
             modal.versoes.default = self.original_data.get("versoes", "")
             modal.chamados.default = self.original_data.get("chamados", "")
             modal.data_atualizacao.default = self.original_data.get("data_atualizacao", "")
+            modal.responsaveis.default = self.original_data.get("responsaveis", "")
 
         modal.message_to_edit = interaction.message
         modal.author_id = self.author_id
@@ -496,6 +497,12 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
         required=True,
     )
 
+    responsaveis = discord.ui.TextInput(
+        label='Responsáveis',
+        placeholder='Mencione os responsáveis separados por vírgula (ex: @user1, @user2)',
+        required=False,
+    )
+
     async def on_submit(self, interaction: discord.Interaction):
         try:
             # Verifica se a data é válida, se fornecida
@@ -547,7 +554,36 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
                 mensagem.append(f"**{EMOJI_CHAMADOS_ATUALIZACAO} • Chamados:** {self.chamados.value}")
 
             mensagem.append(f"**{EMOJI_DATA_ATUALIZACAO} • Data:** {data}")
-            mensagem.append(f"**{EMOJI_USER_ATUALIZACAO} • Atualizado por:** <@{interaction.user.id}>")
+
+            # Processa os responsáveis
+            responsaveis_texto = ""
+            if self.responsaveis.value and self.responsaveis.value.strip():
+                # Adiciona o usuário atual como primeiro responsável
+                responsaveis_texto = f"<@{interaction.user.id}>"
+                
+                # Processa os outros responsáveis
+                outros_responsaveis = [r.strip() for r in self.responsaveis.value.split(',')]
+                for responsavel in outros_responsaveis:
+                    if responsavel:  # Ignora strings vazias
+                        # Se for uma menção (@user), mantém como está
+                        if responsavel.startswith('<@') and responsavel.endswith('>'):
+                            responsaveis_texto += f", {responsavel}"
+                        # Se for um ID, adiciona a formatação de menção
+                        elif responsavel.isdigit():
+                            responsaveis_texto += f", <@{responsavel}>"
+                        # Se for um nome de usuário, tenta encontrar o ID
+                        else:
+                            # Remove @ se existir
+                            username = responsavel.replace('@', '').strip()
+                            # Tenta encontrar o membro pelo nome
+                            member = discord.utils.get(interaction.guild.members, name=username)
+                            if member:
+                                responsaveis_texto += f", <@{member.id}>"
+            else:
+                # Se não houver outros responsáveis, usa apenas o usuário atual
+                responsaveis_texto = f"<@{interaction.user.id}>"
+
+            mensagem.append(f"**{EMOJI_USER_ATUALIZACAO} • Atualizado por:** {responsaveis_texto}")
 
             mensagem_final = '\n'.join(mensagem)
 
@@ -556,6 +592,7 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
                 "versoes": self.versoes.value,
                 "chamados": self.chamados.value,
                 "data_atualizacao": data,
+                "responsaveis": self.responsaveis.value,
             }
 
             view = CustomView("atualizacao", original_data, interaction.user.id)

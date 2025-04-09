@@ -61,10 +61,22 @@ class ServiceSelect(discord.ui.Select):
         if check_permissions and user_roles:
             servicos_permitidos = {}
             for key, config in servicos_config.items():
+                # Converter grupos_permitidos para inteiros
+                grupos_permitidos = []
+                for grupo in config["grupos_permitidos"]:
+                    try:
+                        grupos_permitidos.append(int(grupo))
+                    except (ValueError, TypeError):
+                        logging.error(f"ID de grupo inválido em {key}: {grupo}")
+                
+                # Verificar se o usuário tem algum dos cargos permitidos
                 for role in user_roles:
-                    if int(role) in [int(x) for x in config["grupos_permitidos"]]:
+                    if role in grupos_permitidos:
                         servicos_permitidos[key] = config
+                        logging.info(f"Usuário tem permissão para o serviço {key} pelo cargo {role}")
                         break
+                    else:
+                        logging.debug(f"Cargo {role} não tem permissão para {key}. Grupos permitidos: {grupos_permitidos}")
         else:
             servicos_permitidos = servicos_config
         
@@ -97,14 +109,18 @@ class ServiceSelect(discord.ui.Select):
         servico_selecionado = self.values[0]
         config = self.servicos_config[servico_selecionado]
         
-        # Verifica permissões
-        if not any(int(role) in [int(x) for x in config["grupos_permitidos"]] for role in user_roles):
+        # Verifica permissões - Corrigido para usar inteiros diretamente
+        grupos_permitidos = [int(x) for x in config["grupos_permitidos"]]
+        tem_permissao = any(role in grupos_permitidos for role in user_roles)
+        
+        if not tem_permissao:
+            logging.warning(f"Usuário {interaction.user.name} (cargos: {user_roles}) tentou acessar {servico_selecionado} sem permissão. Grupos permitidos: {grupos_permitidos}")
             await interaction.response.send_message(
                 "Você não tem permissão para acessar este serviço.",
                 ephemeral=True
             )
             return
-            
+        
         status_emoji = "🔴" if config["status"] == "em uso" else "🟢"
         usuario_atual = (
             f" (Em uso por: {config['usuario']})" 
@@ -278,10 +294,17 @@ class GlassfishCog(commands.Cog):
                 return
                 
             user_roles = [role.id for role in interaction.user.roles]
-            servicos_permitidos = {
-                key: config for key, config in self.bot.servicos_config.items()
-                if any(int(role) in [int(x) for x in config["grupos_permitidos"]] for role in user_roles)
-            }
+            logging.info(f"Cargos do usuário {interaction.user.name}: {user_roles}")
+            
+            # Verificar permissões para cada serviço
+            servicos_permitidos = {}
+            for key, config in self.bot.servicos_config.items():
+                grupos_permitidos = [int(x) for x in config["grupos_permitidos"]]
+                logging.info(f"Serviço {key} - Grupos permitidos: {grupos_permitidos}")
+                
+                if any(role in grupos_permitidos for role in user_roles):
+                    servicos_permitidos[key] = config
+                    logging.info(f"Usuário tem permissão para o serviço {key}")
             
             if not servicos_permitidos:
                 await interaction.response.send_message(
