@@ -3,6 +3,7 @@ from discord import app_commands
 import discord
 from datetime import datetime
 import logging
+import re
 
 CANAL_NOTIFICACOES = 997291234643148811
 
@@ -35,13 +36,22 @@ EMOJI_CHAMADOS_99 = "<:discotoolsxyzicon:1327343129753554944>"
 EMOJI_USER_99 = "<:discotoolsxyzicon1:1327343125928087622>"
 
 class StatusButton(discord.ui.Button):
-    def __init__(self):
+    def __init__(self, status="Pendente", label=None, style=None):
+        # Define o estilo com base no status
+        if style is None:
+            style = discord.ButtonStyle.danger if status == "Pendente" else discord.ButtonStyle.success
+        
+        # Define o label com base no status
+        if label is None:
+            label = "⚠️ Aguardando Recebimento" if status == "Pendente" else "✅ Solicitação Recebida"
+        
         super().__init__(
-            label="⚠️ Aguardando Recebimento",
-            style=discord.ButtonStyle.danger,
-            emoji="📋"
+            label=label,
+            style=style,
+            emoji="📋",
+            custom_id=f"rcv_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         )
-        self.status = "Pendente"
+        self.status = status
 
     async def callback(self, interaction: discord.Interaction):
         if self.status == "Pendente":
@@ -126,12 +136,73 @@ class StatusButton(discord.ui.Button):
             new_lines.append("1️⃣ Clique em \"📋 Aguardando Recebimento\" para indicar que você recebeu a solicitação")
             new_lines.append("2️⃣ Clique em \"🗓️ Confirmar Data do Agendamento\" para definir a data confirmada")
 
-        await interaction.message.edit(content='\n'.join(new_lines), view=self.view)
+        # Se não temos self.view, tentamos verificar se a mensagem tem uma view atual
+        try:
+            # Obtemos a view atual ou criamos uma nova
+            from cogs.utils import get_instance_persistence
+            persistence = get_instance_persistence()
+            message_data = await persistence.get_message_data(str(interaction.message.id))
+            
+            if message_data:
+                view_type = message_data.get('view_type', 'agendamento')
+                original_data = message_data.get('original_data', {})
+                author_id = message_data.get('author_id', str(interaction.user.id))
+                
+                # Usamos a própria função para criar uma nova view com os outros botões preservados
+                view = CustomView(view_type, original_data, int(author_id))
+                
+                # Colocamos o status atual nesta view
+                for child in view.children:
+                    if isinstance(child, StatusButton):
+                        child.status = self.status
+                        child.style = self.style
+                        child.label = self.label
+                        child.emoji = self.emoji
+                
+                await interaction.message.edit(content='\n'.join(new_lines), view=view)
+            else:
+                # Se não temos dados persistidos, tentamos usar a view que está na mensagem
+                components = interaction.message.components
+                if components:
+                    # Criamos uma view correspondente à mensagem atual
+                    view_type = "agendamento" 
+                    if "ATUALIZAÇÃO" in interaction.message.content:
+                        view_type = "atualizacao"
+                    elif "VERSÃO BETA 99" in interaction.message.content:
+                        view_type = "beta99"
+                        
+                    # Extraímos o author_id da mensagem
+                    author_id = None
+                    author_pattern = r"Solicitado por: <@(\d+)>"
+                    author_match = re.search(author_pattern, interaction.message.content)
+                    if author_match:
+                        author_id = author_match.group(1)
+                    else:
+                        author_id = str(interaction.user.id)
+                    
+                    view = CustomView(view_type, {}, int(author_id))
+                    await interaction.message.edit(content='\n'.join(new_lines), view=view)
+                else:
+                    # Se não tem components, edita apenas o conteúdo
+                    await interaction.message.edit(content='\n'.join(new_lines))
+        except Exception as e:
+            # Em caso de erro, apenas edita o conteúdo sem modificar a view
+            logging.error(f"Erro ao atualizar view após alteração de status: {str(e)}")
+            try:
+                await interaction.message.edit(content='\n'.join(new_lines))
+            except:
+                pass
+            
         await interaction.response.send_message(f"Você alterou o status para: **{self.status}**", ephemeral=True)
 
 class EditButton(discord.ui.Button):
     def __init__(self, modal_type: str, original_data: dict, author_id: int):
-        super().__init__(label="Editar", style=discord.ButtonStyle.primary, emoji="✏️")
+        super().__init__(
+            label="Editar", 
+            style=discord.ButtonStyle.primary, 
+            emoji="✏️",
+            custom_id=f"edt_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        )
         self.modal_type = modal_type
         self.original_data = original_data
         self.author_id = author_id
@@ -163,7 +234,12 @@ class EditButton(discord.ui.Button):
 
 class DeleteButton(discord.ui.Button):
     def __init__(self, author_id: int):
-        super().__init__(label="Excluir", style=discord.ButtonStyle.danger, emoji="🗑️")
+        super().__init__(
+            label="Excluir", 
+            style=discord.ButtonStyle.danger, 
+            emoji="🗑️",
+            custom_id=f"del_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        )
         self.author_id = author_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -173,6 +249,11 @@ class DeleteButton(discord.ui.Button):
                 ephemeral=True
             )
             return
+        
+        # Remove a mensagem do registro de persistência antes de excluí-la
+        bot = interaction.client
+        if hasattr(bot, 'remove_interactive_message'):
+            bot.remove_interactive_message(interaction.message.id)
         
         await interaction.message.delete()
         await interaction.response.send_message(
@@ -185,7 +266,8 @@ class ConfirmarButton(discord.ui.Button):
         super().__init__(
             label="📅 Confirmar Data do Agendamento",
             style=discord.ButtonStyle.primary,
-            emoji="🗓️"
+            emoji="🗓️",
+            custom_id=f"dat_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         )
         self.is_confirmed = False
 
@@ -224,24 +306,33 @@ class ConfirmarButton(discord.ui.Button):
             await interaction.response.send_message("Confirmação de agendamento cancelada!", ephemeral=True)
 
 class ConfirmarAgendamentoModal(discord.ui.Modal, title='Confirmar Agendamento'):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, original_data=None):
+        # O ID do modal precisa ser um custom_id válido (apenas letras, números, hífens e sublinhados)
+        super().__init__(custom_id=f"confirm_agendamento_{datetime.now().strftime('%Y%m%d%H%M%S')}")
         self.message = None
         self.view = None
+        self.original_data = original_data or {}
         
-    data_hora = discord.ui.TextInput(
-        label='Data e Hora do Agendamento',
-        placeholder='DD/MM/YYYY HH:MM',
-        default=(datetime.now().replace(hour=12, minute=0)).strftime('%d/%m/%Y %H:%M'),
-        required=True,
-    )
+        # Inicializa os campos do formulário
+        self.data_hora = discord.ui.TextInput(
+            label='Data e Hora do Agendamento',
+            placeholder='DD/MM/YYYY HH:MM',
+            default=self.original_data.get('data_agendamento',
+                   (datetime.now().replace(hour=12, minute=0)).strftime('%d/%m/%Y %H:%M')),
+            required=True,
+        )
 
-    observacao = discord.ui.TextInput(
-        label='Observação',
-        placeholder='Observação opcional sobre a confirmação...',
-        style=discord.TextStyle.paragraph,
-        required=False,
-    )
+        self.observacao = discord.ui.TextInput(
+            label='Observação',
+            placeholder='Observação opcional sobre a confirmação...',
+            style=discord.TextStyle.paragraph,
+            required=False,
+            default=self.original_data.get('observacao', '')
+        )
+        
+        # Adiciona os componentes ao modal
+        self.add_item(self.data_hora)
+        self.add_item(self.observacao)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -329,15 +420,29 @@ class CustomView(discord.ui.View):
     def __init__(self, modal_type: str, original_data: dict, author_id: int):
         super().__init__(timeout=None)
         self.author_id = author_id
+        self.modal_type = modal_type
+        self.original_data = original_data
+        
+        # Adiciona prefixo identificador ao custom_id de cada botão
+        view_id = datetime.now().strftime('%Y%m%d%H%M%S')
         
         # Botões que todos podem ver
         if modal_type == "agendamento":
-            self.add_item(StatusButton())
-            self.add_item(ConfirmarButton())
+            status_button = StatusButton()
+            status_button.custom_id = f"rcv_{view_id}_{modal_type}"
+            self.add_item(status_button)
+            
+            confirmar_button = ConfirmarButton()
+            confirmar_button.custom_id = f"dat_{view_id}_{modal_type}"
+            self.add_item(confirmar_button)
             
         # Botões que só o autor pode ver - eles serão filtrados no método interaction_check
         self.edit_button = EditButton(modal_type, original_data, author_id)
+        self.edit_button.custom_id = f"edt_{view_id}_{modal_type}"
+        
         self.delete_button = DeleteButton(author_id)
+        self.delete_button.custom_id = f"del_{view_id}_{modal_type}"
+        
         self.add_item(self.edit_button)
         self.add_item(self.delete_button)
     
@@ -361,34 +466,46 @@ class CustomView(discord.ui.View):
         return True
 
 class Beta99Modal(discord.ui.Modal, title='Versão Beta 99'):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, original_data=None):
+        super().__init__(custom_id=f"beta99_{datetime.now().strftime('%Y%m%d%H%M%S')}")
         self.message_to_edit = None
+        self.original_data = original_data or {}
 
-    cliente = discord.ui.TextInput(
-        label='Cliente',
-        placeholder='Nome do cliente...',
-        required=True,
-    )
-    
-    versao = discord.ui.TextInput(
-        label='Versão',
-        placeholder='Ex: X.X.X.99XX',
-        required=True,
-    )
+        # Inicializa os campos do formulário
+        self.cliente = discord.ui.TextInput(
+            label='Cliente',
+            placeholder='Nome do cliente...',
+            required=True,
+            default=self.original_data.get('cliente', '')
+        )
+        
+        self.versao = discord.ui.TextInput(
+            label='Versão',
+            placeholder='Ex: X.X.X.99XX',
+            required=True,
+            default=self.original_data.get('versao', '')
+        )
 
-    data = discord.ui.TextInput(
-        label='Data',
-        placeholder='DD/MM/YYYY',
-        required=True,
-    )
-    
-    chamados = discord.ui.TextInput(
-        label='Chamados',
-        placeholder='Liste os chamados separados por vírgula...',
-        style=discord.TextStyle.paragraph,
-        required=True,
-    )
+        self.data = discord.ui.TextInput(
+            label='Data',
+            placeholder='DD/MM/YYYY',
+            required=True,
+            default=self.original_data.get('data', datetime.now().strftime('%d/%m/%Y'))
+        )
+        
+        self.chamados = discord.ui.TextInput(
+            label='Chamados',
+            placeholder='Liste os chamados separados por vírgula...',
+            style=discord.TextStyle.paragraph,
+            required=True,
+            default=self.original_data.get('chamados', '')
+        )
+        
+        # Adiciona os componentes ao modal
+        self.add_item(self.cliente)
+        self.add_item(self.versao)
+        self.add_item(self.data)
+        self.add_item(self.chamados)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -405,6 +522,7 @@ class Beta99Modal(discord.ui.Modal, title='Versão Beta 99'):
             
             channel = interaction.client.get_channel(CANAL_NOTIFICACOES)
             if channel:
+                # Envia a mensagem sem botões interativos, não precisa de persistência
                 await channel.send(content=mensagem_final)
                 await interaction.response.send_message(
                     "Versão beta registrada com sucesso!",
@@ -421,37 +539,49 @@ class Beta99Modal(discord.ui.Modal, title='Versão Beta 99'):
             )
 
 class AgendamentoModal(discord.ui.Modal, title='Agendamento'):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, original_data=None):
+        super().__init__(custom_id=f"agendamento_{datetime.now().strftime('%Y%m%d%H%M%S')}")
         self.message_to_edit = None
         self.author_id = None
         self.selected_role = None
+        self.original_data = original_data or {}
 
-    cliente = discord.ui.TextInput(
-        label='Cliente',
-        placeholder='Nome do cliente...',
-        required=True,
-    )
-    
-    chamado = discord.ui.TextInput(
-        label='Chamado',
-        placeholder='Número do chamado...',
-        required=False,
-    )
-    
-    data_agendamento = discord.ui.TextInput(
-        label='Data Prevista',
-        placeholder='DD/MM/YYYY HH:MM',
-        default=(datetime.now().replace(hour=12, minute=0)).strftime('%d/%m/%Y %H:%M'),
-        required=False,
-    )
-    
-    observacao = discord.ui.TextInput(
-        label='Observação',
-        placeholder='Observações adicionais...',
-        style=discord.TextStyle.paragraph,
-        required=False,
-    )
+        # Inicializa os campos do formulário
+        self.cliente = discord.ui.TextInput(
+            label='Cliente',
+            placeholder='Nome do cliente...',
+            required=True,
+            default=self.original_data.get('cliente', '')
+        )
+        
+        self.chamado = discord.ui.TextInput(
+            label='Chamado',
+            placeholder='Número do chamado...',
+            required=False,
+            default=self.original_data.get('chamado', '')
+        )
+        
+        self.data_agendamento = discord.ui.TextInput(
+            label='Data Prevista',
+            placeholder='DD/MM/YYYY HH:MM',
+            default=self.original_data.get('data_agendamento', 
+                   (datetime.now().replace(hour=12, minute=0)).strftime('%d/%m/%Y %H:%M')),
+            required=False,
+        )
+        
+        self.observacao = discord.ui.TextInput(
+            label='Observação',
+            placeholder='Observações adicionais...',
+            style=discord.TextStyle.paragraph,
+            required=False,
+            default=self.original_data.get('observacao', '')
+        )
+        
+        # Adiciona os componentes ao modal
+        self.add_item(self.cliente)
+        self.add_item(self.chamado)
+        self.add_item(self.data_agendamento)
+        self.add_item(self.observacao)
 
     async def on_submit(self, interaction: discord.Interaction):
         # Armazena os dados do modal para uso posterior
@@ -511,7 +641,8 @@ class ConfirmarAgendamentoButton(discord.ui.Button):
         super().__init__(
             label="Confirmar",
             style=discord.ButtonStyle.green,
-            emoji="✅"
+            emoji="✅",
+            custom_id=f"confirm_role_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         )
         self.modal = modal
 
@@ -570,7 +701,20 @@ class ConfirmarAgendamentoButton(discord.ui.Button):
         else:
             channel = interaction.client.get_channel(CANAL_NOTIFICACOES)
             if channel:
-                await channel.send(content=mensagem_final, view=view)
+                # Envia a mensagem e registra para persistência
+                message = await channel.send(content=mensagem_final, view=view)
+                
+                # Registra a mensagem para persistência
+                bot = interaction.client
+                if hasattr(bot, 'save_interactive_message'):
+                    bot.save_interactive_message(
+                        message.id, 
+                        channel.id, 
+                        "agendamento", 
+                        author_id, 
+                        original_data
+                    )
+                
                 await interaction.response.send_message(
                     "Agendamento registrado com sucesso!",
                     ephemeral=True
@@ -584,7 +728,8 @@ class PularButton(discord.ui.Button):
         super().__init__(
             label="Pular (Sem notificação)",
             style=discord.ButtonStyle.secondary,
-            emoji="⏭️"
+            emoji="⏭️",
+            custom_id=f"skip_role_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         )
         self.modal = modal
 
@@ -604,39 +749,49 @@ class RoleSelectorView(discord.ui.View):
         self.add_item(PularButton(modal))
 
 class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, original_data=None):
+        super().__init__(custom_id=f"atualizacao_{datetime.now().strftime('%Y%m%d%H%M%S')}")
         self.message_to_edit = None
         self.author_id = None
         self.selected_users = []  # Lista para armazenar os usuários selecionados
+        self.original_data = original_data or {}
 
-    cliente = discord.ui.TextInput(
-        label='Cliente',
-        placeholder='Nome do cliente...',
-        required=True,
-    )
+        # Inicializa os campos do formulário
+        self.cliente = discord.ui.TextInput(
+            label='Cliente',
+            placeholder='Nome do cliente...',
+            required=True,
+            default=self.original_data.get('cliente', '')
+        )
 
-    versoes = discord.ui.TextInput(
-        label='Versões',
-        placeholder='Preencha as versões após cada título',
-        default='NeoCorp: \nNeoWeb: \nNeoContábil: ',
-        required=True,
-        style=discord.TextStyle.paragraph,
-    )
+        self.versoes = discord.ui.TextInput(
+            label='Versões',
+            placeholder='Preencha as versões após cada título',
+            default=self.original_data.get('versoes', 'NeoCorp: \nNeoWeb: \nNeoContábil: '),
+            required=True,
+            style=discord.TextStyle.paragraph,
+        )
 
-    chamados = discord.ui.TextInput(
-        label='Chamados',
-        placeholder='Números dos chamados...',
-        required=False,
-        style=discord.TextStyle.paragraph,
-    )
+        self.chamados = discord.ui.TextInput(
+            label='Chamados',
+            placeholder='Números dos chamados...',
+            required=False,
+            style=discord.TextStyle.paragraph,
+            default=self.original_data.get('chamados', '')
+        )
 
-    data_atualizacao = discord.ui.TextInput(
-        label='Data',
-        placeholder='DD/MM/YYYY',
-        default=datetime.now().strftime('%d/%m/%Y'),
-        required=True,
-    )
+        self.data_atualizacao = discord.ui.TextInput(
+            label='Data',
+            placeholder='DD/MM/YYYY',
+            default=self.original_data.get('data_atualizacao', datetime.now().strftime('%d/%m/%Y')),
+            required=True,
+        )
+        
+        # Adiciona os componentes ao modal
+        self.add_item(self.cliente)
+        self.add_item(self.versoes)
+        self.add_item(self.chamados)
+        self.add_item(self.data_atualizacao)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -722,7 +877,20 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
             else:
                 channel = interaction.client.get_channel(CANAL_NOTIFICACOES)
                 if channel:
-                    await channel.send(content=mensagem_final, view=view)
+                    # Envia a mensagem e registra para persistência
+                    message = await channel.send(content=mensagem_final, view=view)
+                    
+                    # Registra a mensagem para persistência
+                    bot = interaction.client
+                    if hasattr(bot, 'save_interactive_message'):
+                        bot.save_interactive_message(
+                            message.id, 
+                            channel.id, 
+                            "atualizacao", 
+                            interaction.user.id, 
+                            original_data
+                        )
+                    
                     await interaction.response.send_message(
                         "Atualização registrada com sucesso!",
                         ephemeral=True
