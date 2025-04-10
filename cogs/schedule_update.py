@@ -37,9 +37,9 @@ EMOJI_USER_99 = "<:discotoolsxyzicon1:1327343125928087622>"
 class StatusButton(discord.ui.Button):
     def __init__(self):
         super().__init__(
-            label="Pendente",
+            label="⚠️ Aguardando Recebimento",
             style=discord.ButtonStyle.danger,
-            emoji="⏳"
+            emoji="📋"
         )
         self.status = "Pendente"
 
@@ -47,15 +47,16 @@ class StatusButton(discord.ui.Button):
         if self.status == "Pendente":
             self.status = "Recebido"
             self.style = discord.ButtonStyle.success
-            self.label = "Recebido"
-            self.emoji = "✅"
+            self.label = "✅ Solicitação Recebida"
+            self.emoji = "📋"
         else:
             self.status = "Pendente"
             self.style = discord.ButtonStyle.danger
-            self.label = "Pendente"
-            self.emoji = "⏳"
+            self.label = "⚠️ Aguardando Recebimento"
+            self.emoji = "📋"
 
         content_lines = interaction.message.content.split('\n')
+        new_lines = []
         
         # Verifica se já está agendado
         is_agendado = any("Data Confirmada:" in line for line in content_lines)
@@ -64,21 +65,69 @@ class StatusButton(discord.ui.Button):
         )
         
         # Adiciona informação de quem recebeu
-        recebido_por = f" por <@{interaction.user.id}>" if self.status == "Recebido" else ""
-        status_line = f"**{EMOJI_STATUS_AGEND} • Status: **{self.status}{recebido_por} | {status_complement}"
+        recebido_por = f"<@{interaction.user.id}>" if self.status == "Recebido" else ""
+        confirmado_por = None
         
-        status_found = False
-        for i, line in enumerate(content_lines):
-            if "**• Status:**" in line:
-                content_lines[i] = status_line
-                status_found = True
-                break
+        # Processa as linhas de conteúdo
+        instrucoes_encontradas = False
+        usuario_solicitante = None
+        
+        for line in content_lines:
+            # Ignora linhas de instruções e histórico anteriores, serão recriadas
+            if line.startswith("**INSTRUÇÕES PARA OS RESPONSÁVEIS") or \
+               line.startswith("**Histórico de Ações") or \
+               line.startswith("1️⃣") or line.startswith("2️⃣") or \
+               line.startswith("✅ **Status Atual") or \
+               line.startswith("📋 Solicitação recebida") or \
+               line.startswith("🗓️ Data confirmada") or \
+               line == "":
+                instrucoes_encontradas = True
+                continue
                 
-        if not status_found:
-            content_lines.insert(-1, status_line)
+            # Captura informação de quem foi o solicitante
+            if "Solicitado por:" in line:
+                usuario_solicitante = line.split("Solicitado por:")[1].strip()
+                new_lines.append(line)
+                continue
+                
+            # Captura informação de quem confirmou a data, se existir
+            if "Data Confirmada:" in line:
+                if "por" in line:
+                    confirmado_por = line.split("por")[1].strip()
+                
+            # Outras linhas são mantidas normalmente
+            if "**• Status:**" in line:
+                status_line = f"**{EMOJI_STATUS_AGEND} • Status: **{self.status}{' por ' + recebido_por if recebido_por else ''} | {status_complement}"
+                new_lines.append(status_line)
+            else:
+                new_lines.append(line)
+        
+        # Adiciona instruções e histórico após todas as outras informações
+        if self.status == "Recebido":
+            # Adiciona quebra de linha antes das instruções
+            new_lines.append("")
+            new_lines.append("**INSTRUÇÕES PARA OS RESPONSÁVEIS:**")
+            if is_agendado:
+                new_lines.append("✅ **Status Atual**: Agendamento confirmado")
+            else:
+                new_lines.append("✅ **Status Atual**: Solicitação recebida, aguardando confirmação da data")
+                new_lines.append("2️⃣ Clique em \"🗓️ Confirmar Data do Agendamento\" para definir a data confirmada")
+                
+            # Adiciona o histórico de ações
+            new_lines.append("")
+            new_lines.append("**Histórico de Ações:**")
+            new_lines.append(f"📋 Solicitação recebida por {recebido_por}")
+            if confirmado_por:
+                new_lines.append(f"🗓️ Data confirmada por {confirmado_por}")
+        else:
+            # Se o status voltou para Pendente, restaura as instruções originais
+            new_lines.append("")
+            new_lines.append("**INSTRUÇÕES PARA OS RESPONSÁVEIS:**")
+            new_lines.append("1️⃣ Clique em \"📋 Aguardando Recebimento\" para indicar que você recebeu a solicitação")
+            new_lines.append("2️⃣ Clique em \"🗓️ Confirmar Data do Agendamento\" para definir a data confirmada")
 
-        await interaction.message.edit(content='\n'.join(content_lines), view=self.view)
-        await interaction.response.defer()
+        await interaction.message.edit(content='\n'.join(new_lines), view=self.view)
+        await interaction.response.send_message(f"Você alterou o status para: **{self.status}**", ephemeral=True)
 
 class EditButton(discord.ui.Button):
     def __init__(self, modal_type: str, original_data: dict, author_id: int):
@@ -101,14 +150,12 @@ class EditButton(discord.ui.Button):
             modal.chamado.default = self.original_data.get("chamado", "")
             modal.data_agendamento.default = self.original_data.get("data_agendamento", "")
             modal.observacao.default = self.original_data.get("observacao", "")
-            modal.cargo.default = self.original_data.get("cargo", "")
         else:
             modal = AtualizacaoModal()
             modal.cliente.default = self.original_data.get("cliente", "")
             modal.versoes.default = self.original_data.get("versoes", "")
             modal.chamados.default = self.original_data.get("chamados", "")
             modal.data_atualizacao.default = self.original_data.get("data_atualizacao", "")
-            modal.responsaveis.default = self.original_data.get("responsaveis", "")
 
         modal.message_to_edit = interaction.message
         modal.author_id = self.author_id
@@ -136,9 +183,9 @@ class DeleteButton(discord.ui.Button):
 class ConfirmarButton(discord.ui.Button):
     def __init__(self):
         super().__init__(
-            label="Confirmar Agendamento",
+            label="📅 Confirmar Data do Agendamento",
             style=discord.ButtonStyle.primary,
-            emoji="📅"
+            emoji="🗓️"
         )
         self.is_confirmed = False
 
@@ -170,7 +217,7 @@ class ConfirmarButton(discord.ui.Button):
                     new_lines.append(line)
 
             self.is_confirmed = False
-            self.label = "Confirmar Agendamento"
+            self.label = "📅 Confirmar Data do Agendamento"
             self.style = discord.ButtonStyle.primary
             
             await interaction.message.edit(content='\n'.join(new_lines), view=self.view)
@@ -207,7 +254,7 @@ class ConfirmarAgendamentoModal(discord.ui.Modal, title='Confirmar Agendamento')
             new_lines.append("**AGENDAMENTO**")
             new_lines.append("🎯 **AGENDAMENTO CONFIRMADO** 🎯")
             
-            data_line = f"**{EMOJI_DATA_AGEND} • Data Confirmada:** {self.data_hora.value}"
+            data_line = f"**{EMOJI_DATA_AGEND} • Data Confirmada:** {self.data_hora.value} por <@{interaction.user.id}>"
             data_found = False
             recebido_por = None
             obs_found = False
@@ -230,6 +277,12 @@ class ConfirmarAgendamentoModal(discord.ui.Modal, title='Confirmar Agendamento')
                     else:
                         new_lines.append(line)
                     obs_found = True
+                elif line.startswith("**INSTRUÇÕES PARA OS RESPONSÁVEIS"):
+                    # Pula as linhas de instruções, serão adicionadas depois
+                    pass
+                elif line.startswith("1️⃣") or line.startswith("2️⃣"):
+                    # Pula as linhas de instruções, serão adicionadas depois
+                    pass
                 else:
                     new_lines.append(line)
             
@@ -238,7 +291,17 @@ class ConfirmarAgendamentoModal(discord.ui.Modal, title='Confirmar Agendamento')
 
             # Adiciona observação da confirmação se não existir observação anterior
             if not obs_found and self.observacao.value and self.observacao.value.strip():
-                new_lines.insert(-1, f"**{EMOJI_OBS_AGEND} • Observação da Confirmação:** Confirmado por {self.observacao.value}")
+                new_lines.insert(-1, f"**{EMOJI_OBS_AGEND} • Observação da Confirmação:** {self.observacao.value}")
+
+            # Adiciona instruções atualizadas com espaçamento melhorado
+            new_lines.append("\n**INSTRUÇÕES PARA OS RESPONSÁVEIS:**")
+            new_lines.append("✅ **Status Atual**: Agendamento confirmado")
+            new_lines.append("\n**Histórico de Ações:**")
+            if recebido_por:
+                new_lines.append(f"📋 Solicitação recebida por {recebido_por}")
+            else:
+                new_lines.append(f"📋 Solicitação recebida por <@{interaction.user.id}>")
+            new_lines.append(f"🗓️ Data confirmada por <@{interaction.user.id}>")
 
             # Atualiza o botão
             for item in self.view.children:
@@ -265,12 +328,37 @@ class ConfirmarAgendamentoModal(discord.ui.Modal, title='Confirmar Agendamento')
 class CustomView(discord.ui.View):
     def __init__(self, modal_type: str, original_data: dict, author_id: int):
         super().__init__(timeout=None)
+        self.author_id = author_id
+        
+        # Botões que todos podem ver
         if modal_type == "agendamento":
             self.add_item(StatusButton())
-            self.add_item(ConfirmarButton())  # Adicionar o novo botão
-        self.add_item(EditButton(modal_type, original_data, author_id))
-        self.add_item(DeleteButton(author_id))
+            self.add_item(ConfirmarButton())
+            
+        # Botões que só o autor pode ver - eles serão filtrados no método interaction_check
+        self.edit_button = EditButton(modal_type, original_data, author_id)
+        self.delete_button = DeleteButton(author_id)
+        self.add_item(self.edit_button)
+        self.add_item(self.delete_button)
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Se for o botão de editar ou excluir e não for o autor, esconde o botão
+        component_id = interaction.data.get('custom_id', '')
         
+        # Botões são referencidados por índice no children
+        edit_custom_id = self.edit_button.custom_id
+        delete_custom_id = self.delete_button.custom_id
+        
+        # Se o componente interagido é um dos botões restritos e o usuário não é o autor
+        if (component_id in [edit_custom_id, delete_custom_id] and 
+            interaction.user.id != self.author_id):
+            await interaction.response.send_message(
+                "Apenas o autor original pode usar este botão.",
+                ephemeral=True
+            )
+            return False
+        
+        return True
 
 class Beta99Modal(discord.ui.Modal, title='Versão Beta 99'):
     def __init__(self):
@@ -337,6 +425,7 @@ class AgendamentoModal(discord.ui.Modal, title='Agendamento'):
         super().__init__()
         self.message_to_edit = None
         self.author_id = None
+        self.selected_role = None
 
     cliente = discord.ui.TextInput(
         label='Cliente',
@@ -363,105 +452,156 @@ class AgendamentoModal(discord.ui.Modal, title='Agendamento'):
         style=discord.TextStyle.paragraph,
         required=False,
     )
-    
-    cargo = discord.ui.TextInput(
-        label='Cargo para Notificar',
-        placeholder='Digite @ ou ID do cargo (opcional)',
-        default='@Suporte',
-        required=False,
-    )
 
     async def on_submit(self, interaction: discord.Interaction):
-        try:
-            data_valida = True
-            if self.data_agendamento.value and self.data_agendamento.value.strip():
-                try:
-                    datetime.strptime(self.data_agendamento.value.strip(), '%d/%m/%Y %H:%M')
-                except ValueError:
-                    data_valida = False
-                    await interaction.response.send_message(
-                        "Formato de data inválido. Use DD/MM/YYYY HH:MM",
-                        ephemeral=True
-                    )
-                    return
-
-            if not data_valida:
-                return
-
-            author_id = self.author_id if self.author_id else interaction.user.id
-            
-            # Formatação da mensagem usando as constantes de emoji
-            mensagem = [
-                "**AGENDAMENTO**",
-            ]
-
-            # Adiciona menção do cargo se foi fornecido
-            if self.cargo.value and self.cargo.value.strip():
-                # Tenta encontrar o cargo pelo ID ou nome
-                cargo_valor = self.cargo.value.strip()
-                if cargo_valor.isdigit():
-                    cargo = interaction.guild.get_role(int(cargo_valor))
-                else:
-                    # Remove @ e espaços se houver
-                    cargo_nome = cargo_valor.replace('@', '').strip()
-                    cargo = discord.utils.get(interaction.guild.roles, name=cargo_nome)
-                
-                if cargo:
-                    mensagem.append(f"{cargo.mention}")
-                
-            mensagem.extend([
-                f"**{EMOJI_CLIENTE_AGEND} • Cliente:** {self.cliente.value}",
-            ])
-
-            if self.chamado.value and self.chamado.value.strip():
-                mensagem.append(f"**{EMOJI_CHAMADO_AGEND} • Chamado:** {self.chamado.value}")
-
-            if self.data_agendamento.value and self.data_agendamento.value.strip():
-                mensagem.append(f"**{EMOJI_DATA_AGEND} • Data Prevista:** {self.data_agendamento.value}")
-            
-            if self.observacao.value and self.observacao.value.strip():
-                mensagem.append(f"**{EMOJI_OBS_AGEND} • Observação:** {self.observacao.value}")
-
-            mensagem.append(f"**{EMOJI_STATUS_AGEND} • Status: **Pendente | Aguardando Recebimento")
-            mensagem.append(f"**{EMOJI_USER_AGEND} • Solicitado por: **<@{author_id}>")
-
-            mensagem_final = '\n'.join(mensagem)
-
-            original_data = {
-                "cliente": self.cliente.value,
-                "chamado": self.chamado.value,
-                "data_agendamento": self.data_agendamento.value,
-                "observacao": self.observacao.value,
-                "cargo": self.cargo.value,  # Adiciona cargo aos dados originais
-            }
-            
-            view = CustomView("agendamento", original_data, author_id)
-            
-            if self.message_to_edit:
-                await self.message_to_edit.edit(content=mensagem_final, view=view)
+        # Armazena os dados do modal para uso posterior
+        self.interaction = interaction
+        self.author_id = interaction.user.id
+        
+        # Verifica se a data é válida
+        data_valida = True
+        if self.data_agendamento.value and self.data_agendamento.value.strip():
+            try:
+                datetime.strptime(self.data_agendamento.value.strip(), '%d/%m/%Y %H:%M')
+            except ValueError:
+                data_valida = False
                 await interaction.response.send_message(
-                    "Agendamento atualizado com sucesso!",
+                    "Formato de data inválido. Use DD/MM/YYYY HH:MM",
                     ephemeral=True
                 )
-                logging.info(f"{interaction.user.name} atualizou um agendamento para {self.cliente.value}")
-            else:
-                channel = interaction.client.get_channel(CANAL_NOTIFICACOES)
-                if channel:
-                    await channel.send(content=mensagem_final, view=view)
-                    await interaction.response.send_message(
-                        "Agendamento registrado com sucesso!",
-                        ephemeral=True
-                    )
-                    logging.info(f"{interaction.user.name} registrou um agendamento para {self.cliente.value}")
-                else:
-                    raise Exception("Canal não encontrado")
+                return
 
-        except Exception as e:
-            logging.error(f"Erro ao registrar agendamento: {str(e)}")
+        if not data_valida:
+            return
+            
+        # Após validar o modal, mostra o seletor de cargo
+        view = RoleSelectorView(self)
+        await interaction.response.send_message(
+            "**2ª Etapa: Selecione o cargo para notificar**\n\n"
+            "Escolha qual cargo deve ser notificado sobre este agendamento:",
+            view=view,
+            ephemeral=True
+        )
+        logging.info(f"{interaction.user.name} preencheu o modal de agendamento e está selecionando o cargo")
+
+class RoleSelect(discord.ui.RoleSelect):
+    def __init__(self, modal: AgendamentoModal):
+        super().__init__(
+            placeholder="Selecione o cargo para notificar...",
+            min_values=0,
+            max_values=1
+        )
+        self.modal = modal
+
+    async def callback(self, interaction: discord.Interaction):
+        # Armazena o cargo selecionado no modal
+        self.modal.selected_role = self.values[0] if self.values else None
+        
+        # Atualiza a mensagem com o cargo selecionado
+        role_text = self.values[0].mention if self.values else "Nenhum cargo selecionado"
+        await interaction.response.edit_message(
+            content=f"**2ª Etapa: Selecione o cargo para notificar**\n\n"
+                   f"Cargo selecionado: {role_text}\n\n"
+                   f"Clique em 'Confirmar' para finalizar o agendamento.",
+            view=self.view
+        )
+
+class ConfirmarAgendamentoButton(discord.ui.Button):
+    def __init__(self, modal: AgendamentoModal):
+        super().__init__(
+            label="Confirmar",
+            style=discord.ButtonStyle.green,
+            emoji="✅"
+        )
+        self.modal = modal
+
+    async def callback(self, interaction: discord.Interaction):
+        # Obtém os dados do modal
+        author_id = self.modal.author_id if self.modal.author_id else interaction.user.id
+        
+        # Formatação da mensagem
+        mensagem = [
+            "**AGENDAMENTO**",
+        ]
+
+        # Adiciona menção do cargo se foi selecionado
+        if self.modal.selected_role:
+            mensagem.append(f"{self.modal.selected_role.mention}")
+        
+        mensagem.extend([
+            f"**{EMOJI_CLIENTE_AGEND} • Cliente:** {self.modal.cliente.value}",
+        ])
+
+        if self.modal.chamado.value and self.modal.chamado.value.strip():
+            mensagem.append(f"**{EMOJI_CHAMADO_AGEND} • Chamado:** {self.modal.chamado.value}")
+
+        if self.modal.data_agendamento.value and self.modal.data_agendamento.value.strip():
+            mensagem.append(f"**{EMOJI_DATA_AGEND} • Data Prevista:** {self.modal.data_agendamento.value}")
+        
+        if self.modal.observacao.value and self.modal.observacao.value.strip():
+            mensagem.append(f"**{EMOJI_OBS_AGEND} • Observação:** {self.modal.observacao.value}")
+
+        mensagem.append(f"**{EMOJI_STATUS_AGEND} • Status: **Pendente | Aguardando Recebimento")
+        mensagem.append(f"**{EMOJI_USER_AGEND} • Solicitado por: **<@{author_id}>")
+        
+        # Adiciona instruções claras para os responsáveis com espaçamento melhorado
+        mensagem.append("\n**INSTRUÇÕES PARA OS RESPONSÁVEIS:**")
+        mensagem.append("1️⃣ Clique em \"📋 Aguardando Recebimento\" para indicar que você recebeu a solicitação")
+        mensagem.append("2️⃣ Clique em \"🗓️ Confirmar Data do Agendamento\" para definir a data confirmada")
+
+        mensagem_final = '\n'.join(mensagem)
+
+        original_data = {
+            "cliente": self.modal.cliente.value,
+            "chamado": self.modal.chamado.value,
+            "data_agendamento": self.modal.data_agendamento.value,
+            "observacao": self.modal.observacao.value,
+        }
+        
+        view = CustomView("agendamento", original_data, author_id)
+        
+        if self.modal.message_to_edit:
+            await self.modal.message_to_edit.edit(content=mensagem_final, view=view)
             await interaction.response.send_message(
-                "Ocorreu um erro ao registrar o agendamento. Tente novamente mais tarde.",
+                "Agendamento atualizado com sucesso!",
                 ephemeral=True
             )
+            logging.info(f"{interaction.user.name} atualizou um agendamento para {self.modal.cliente.value}")
+        else:
+            channel = interaction.client.get_channel(CANAL_NOTIFICACOES)
+            if channel:
+                await channel.send(content=mensagem_final, view=view)
+                await interaction.response.send_message(
+                    "Agendamento registrado com sucesso!",
+                    ephemeral=True
+                )
+                logging.info(f"{interaction.user.name} registrou um agendamento para {self.modal.cliente.value}")
+            else:
+                raise Exception("Canal não encontrado")
+
+class PularButton(discord.ui.Button):
+    def __init__(self, modal: AgendamentoModal):
+        super().__init__(
+            label="Pular (Sem notificação)",
+            style=discord.ButtonStyle.secondary,
+            emoji="⏭️"
+        )
+        self.modal = modal
+
+    async def callback(self, interaction: discord.Interaction):
+        # Define que não há cargo para notificar
+        self.modal.selected_role = None
+        # Chama a mesma lógica do botão Confirmar
+        confirmar = ConfirmarAgendamentoButton(self.modal)
+        await confirmar.callback(interaction)
+
+class RoleSelectorView(discord.ui.View):
+    def __init__(self, modal: AgendamentoModal):
+        super().__init__(timeout=None)
+        self.modal = modal
+        self.add_item(RoleSelect(modal))
+        self.add_item(ConfirmarAgendamentoButton(modal))
+        self.add_item(PularButton(modal))
 
 class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
     def __init__(self):
@@ -598,6 +738,7 @@ class AtualizacaoModal(discord.ui.Modal, title='Atualização'):
                 ephemeral=True
             )
 
+# Definindo os componentes para o comando /atualizacao
 class ConfirmButton(discord.ui.Button):
     def __init__(self, modal: AtualizacaoModal):
         super().__init__(
@@ -609,55 +750,6 @@ class ConfirmButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(self.modal)
-
-class SimButton(discord.ui.Button):
-    def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
-        super().__init__(
-            label="Sim",
-            style=discord.ButtonStyle.green,
-            emoji="✅"
-        )
-        self.modal = modal
-        self.current_user = current_user
-
-    async def callback(self, interaction: discord.Interaction):
-        view = AtualizacaoView(self.modal, self.current_user)
-        await interaction.response.edit_message(
-            content="**1ª Etapa: Selecione os responsáveis adicionais:**\n\n"
-                   "**⚠️ IMPORTANTE ⚠️**\n"
-                   "**Você já está listado como responsável principal desta atualização!**\n\n"
-                   "Use o menu abaixo para selecionar **outros responsáveis** pela atualização.\n"
-                   "Após selecionar, clique no botão 'Continuar' para abrir o formulário de atualização.",
-            view=view
-        )
-
-class NaoButton(discord.ui.Button):
-    def __init__(self, modal: AtualizacaoModal):
-        super().__init__(
-            label="Não",
-            style=discord.ButtonStyle.red,
-            emoji="❌"
-        )
-        self.modal = modal
-
-    async def callback(self, interaction: discord.Interaction):
-        # Define apenas o usuário atual como responsável
-        self.modal.selected_users = [interaction.user]
-        await interaction.response.send_modal(self.modal)
-
-class InicialView(discord.ui.View):
-    def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
-        super().__init__(timeout=None)
-        self.modal = modal
-        self.add_item(SimButton(modal, current_user))
-        self.add_item(NaoButton(modal))
-
-class AtualizacaoView(discord.ui.View):
-    def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
-        super().__init__(timeout=None)
-        self.modal = modal
-        self.add_item(ResponsaveisSelect(modal, current_user))
-        self.add_item(ConfirmButton(modal))
 
 class ResponsaveisSelect(discord.ui.UserSelect):
     def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
@@ -685,16 +777,61 @@ class ResponsaveisSelect(discord.ui.UserSelect):
             view=self.view
         )
 
+class AtualizacaoView(discord.ui.View):
+    def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
+        super().__init__(timeout=None)
+        self.modal = modal
+        self.add_item(ResponsaveisSelect(modal, current_user))
+        self.add_item(ConfirmButton(modal))
+
+class NaoButton(discord.ui.Button):
+    def __init__(self, modal: AtualizacaoModal):
+        super().__init__(
+            label="Não",
+            style=discord.ButtonStyle.red,
+            emoji="❌"
+        )
+        self.modal = modal
+
+    async def callback(self, interaction: discord.Interaction):
+        # Define apenas o usuário atual como responsável
+        self.modal.selected_users = [interaction.user]
+        await interaction.response.send_modal(self.modal)
+
+class SimButton(discord.ui.Button):
+    def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
+        super().__init__(
+            label="Sim",
+            style=discord.ButtonStyle.green,
+            emoji="✅"
+        )
+        self.modal = modal
+        self.current_user = current_user
+
+    async def callback(self, interaction: discord.Interaction):
+        view = AtualizacaoView(self.modal, self.current_user)
+        await interaction.response.edit_message(
+            content="**1ª Etapa: Selecione os responsáveis adicionais:**\n\n"
+                   "**⚠️ IMPORTANTE ⚠️**\n"
+                   "**Você já está listado como responsável principal desta atualização!**\n\n"
+                   "Use o menu abaixo para selecionar **outros responsáveis** pela atualização.\n"
+                   "Após selecionar, clique no botão 'Continuar' para abrir o formulário de atualização.",
+            view=view
+        )
+
+class InicialView(discord.ui.View):
+    def __init__(self, modal: AtualizacaoModal, current_user: discord.User):
+        super().__init__(timeout=None)
+        self.modal = modal
+        self.add_item(SimButton(modal, current_user))
+        self.add_item(NaoButton(modal))
+
 class ScheduleUpdateCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        
-        
-    @app_commands.command(
-    name="beta99",
-    description="Registra uma nova versão beta 99"
-)
+    
     async def beta99(self, interaction: discord.Interaction):
+        """Comando para registrar uma nova versão beta 99"""
         try:
             await interaction.response.send_modal(Beta99Modal())
             logging.info(f"{interaction.user.name} abriu o modal de versão beta")
@@ -705,11 +842,8 @@ class ScheduleUpdateCog(commands.Cog):
                 ephemeral=True
             )
 
-    @app_commands.command(
-        name="agendamento",
-        description="Registra um novo agendamento"
-    )
     async def agendamento(self, interaction: discord.Interaction):
+        """Comando para registrar um novo agendamento"""
         try:
             await interaction.response.send_modal(AgendamentoModal())
             logging.info(f"{interaction.user.name} abriu o modal de agendamento")
@@ -728,11 +862,8 @@ class ScheduleUpdateCog(commands.Cog):
                 ephemeral=True
             )
 
-    @app_commands.command(
-        name="atualizacao",
-        description="Registra uma nova atualização"
-    )
     async def atualizacao(self, interaction: discord.Interaction):
+        """Comando para registrar uma nova atualização"""
         try:
             modal = AtualizacaoModal()
             view = InicialView(modal, interaction.user)
@@ -759,3 +890,7 @@ class ScheduleUpdateCog(commands.Cog):
                 "Ocorreu um erro ao abrir o formulário. Tente novamente mais tarde.",
                 ephemeral=True
             )
+
+async def setup(bot):
+    await bot.add_cog(ScheduleUpdateCog(bot))
+    logging.info("ScheduleUpdateCog adicionado via setup()")

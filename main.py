@@ -53,19 +53,52 @@ class Bot(commands.Bot):
             self.servicos_config = {}
         
         # Carrega os cogs
-        await self.add_cog(GlassfishCog(self))
-        await self.add_cog(HelpCog(self))
-        await self.add_cog(ScheduleUpdateCog(self))
-        # await self.add_cog(GlassfishManagementCog(self))
+        try:
+            await self.add_cog(GlassfishCog(self))
+            await self.add_cog(HelpCog(self))
+            
+            # Criamos manualmente o cog e os comandos
+            schedule_cog = ScheduleUpdateCog(self)
+            await self.add_cog(schedule_cog)
+            
+            # Registra explicitamente os comandos principais
+            self.tree.add_command(discord.app_commands.Command(
+                name="beta99",
+                description="Registra uma nova versão beta 99",
+                callback=schedule_cog.beta99
+            ))
+            
+            self.tree.add_command(discord.app_commands.Command(
+                name="agendamento",
+                description="Registra um novo agendamento",
+                callback=schedule_cog.agendamento
+            ))
+            
+            self.tree.add_command(discord.app_commands.Command(
+                name="atualizacao",
+                description="Registra uma nova atualização",
+                callback=schedule_cog.atualizacao
+            ))
+            
+            logging.info("Todos os cogs foram carregados com sucesso")
+        except Exception as e:
+            logging.error(f"Erro ao carregar cogs: {str(e)}")
         
     async def on_ready(self):
         print(f'{self.user} está pronto!')
         logging.info(f'Bot iniciado como {self.user}')
         await self.change_presence(activity=discord.Game("Neo Chamados"))
-        await self.tree.sync()
-        print("Comandos sincronizados globalmente.")
-        logging.info("Comandos sincronizados globalmente com sucesso")
-          
+        
+        try:
+            # Sincroniza comandos com reset completo
+            commands = await self.tree.sync()
+            command_names = [cmd.name for cmd in commands]
+            logging.info(f"Comandos sincronizados: {', '.join(command_names)}")
+            print(f"Comandos sincronizados: {', '.join(command_names)}")
+        except Exception as e:
+            logging.error(f"Erro ao sincronizar comandos: {str(e)}")
+            print(f"Erro ao sincronizar comandos: {str(e)}")
+
 def main():
     try:
         with open("token.txt", "r") as file:
