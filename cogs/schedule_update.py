@@ -315,20 +315,20 @@ class ConfirmarAgendamentoModal(discord.ui.Modal, title='Confirmar Agendamento')
         
         # Inicializa os campos do formulário
         self.data_hora = discord.ui.TextInput(
-            label='Data e Hora do Agendamento',
-            placeholder='DD/MM/YYYY HH:MM',
+        label='Data e Hora do Agendamento',
+        placeholder='DD/MM/YYYY HH:MM',
             default=self.original_data.get('data_agendamento',
                    (datetime.now().replace(hour=12, minute=0)).strftime('%d/%m/%Y %H:%M')),
-            required=True,
-        )
+        required=True,
+    )
 
         self.observacao = discord.ui.TextInput(
-            label='Observação',
-            placeholder='Observação opcional sobre a confirmação...',
-            style=discord.TextStyle.paragraph,
-            required=False,
+        label='Observação',
+        placeholder='Observação opcional sobre a confirmação...',
+        style=discord.TextStyle.paragraph,
+        required=False,
             default=self.original_data.get('observacao', '')
-        )
+    )
         
         # Adiciona os componentes ao modal
         self.add_item(self.data_hora)
@@ -473,31 +473,31 @@ class Beta99Modal(discord.ui.Modal, title='Versão Beta 99'):
 
         # Inicializa os campos do formulário
         self.cliente = discord.ui.TextInput(
-            label='Cliente',
-            placeholder='Nome do cliente...',
-            required=True,
+        label='Cliente',
+        placeholder='Nome do cliente...',
+        required=True,
             default=self.original_data.get('cliente', '')
-        )
-        
+    )
+    
         self.versao = discord.ui.TextInput(
-            label='Versão',
-            placeholder='Ex: X.X.X.99XX',
-            required=True,
+        label='Versão',
+        placeholder='Ex: X.X.X.99XX',
+        required=True,
             default=self.original_data.get('versao', '')
-        )
+    )
 
         self.data = discord.ui.TextInput(
-            label='Data',
-            placeholder='DD/MM/YYYY',
-            required=True,
+        label='Data',
+        placeholder='DD/MM/YYYY',
+        required=True,
             default=self.original_data.get('data', datetime.now().strftime('%d/%m/%Y'))
-        )
-        
+    )
+    
         self.chamados = discord.ui.TextInput(
-            label='Chamados',
-            placeholder='Liste os chamados separados por vírgula...',
-            style=discord.TextStyle.paragraph,
-            required=True,
+        label='Chamados',
+        placeholder='Liste os chamados separados por vírgula...',
+        style=discord.TextStyle.paragraph,
+        required=True,
             default=self.original_data.get('chamados', '')
         )
         
@@ -548,32 +548,32 @@ class AgendamentoModal(discord.ui.Modal, title='Agendamento'):
 
         # Inicializa os campos do formulário
         self.cliente = discord.ui.TextInput(
-            label='Cliente',
-            placeholder='Nome do cliente...',
-            required=True,
+        label='Cliente',
+        placeholder='Nome do cliente...',
+        required=True,
             default=self.original_data.get('cliente', '')
-        )
-        
+    )
+    
         self.chamado = discord.ui.TextInput(
-            label='Chamado',
-            placeholder='Número do chamado...',
-            required=False,
+        label='Chamado',
+        placeholder='Número do chamado...',
+        required=False,
             default=self.original_data.get('chamado', '')
-        )
-        
+    )
+    
         self.data_agendamento = discord.ui.TextInput(
-            label='Data Prevista',
-            placeholder='DD/MM/YYYY HH:MM',
+        label='Data Prevista',
+        placeholder='DD/MM/YYYY HH:MM',
             default=self.original_data.get('data_agendamento', 
                    (datetime.now().replace(hour=12, minute=0)).strftime('%d/%m/%Y %H:%M')),
-            required=False,
-        )
-        
+        required=False,
+    )
+    
         self.observacao = discord.ui.TextInput(
-            label='Observação',
-            placeholder='Observações adicionais...',
-            style=discord.TextStyle.paragraph,
-            required=False,
+        label='Observação',
+        placeholder='Observações adicionais...',
+        style=discord.TextStyle.paragraph,
+        required=False,
             default=self.original_data.get('observacao', '')
         )
         
@@ -603,7 +603,7 @@ class AgendamentoModal(discord.ui.Modal, title='Agendamento'):
 
         if not data_valida:
             return
-            
+
         # Após validar o modal, mostra o seletor de cargo
         view = RoleSelectorView(self)
         await interaction.response.send_message(
@@ -658,17 +658,17 @@ class ConfirmarAgendamentoButton(discord.ui.Button):
         # Adiciona menção do cargo se foi selecionado
         if self.modal.selected_role:
             mensagem.append(f"{self.modal.selected_role.mention}")
-        
-        mensagem.extend([
+                
+            mensagem.extend([
             f"**{EMOJI_CLIENTE_AGEND} • Cliente:** {self.modal.cliente.value}",
-        ])
+            ])
 
         if self.modal.chamado.value and self.modal.chamado.value.strip():
             mensagem.append(f"**{EMOJI_CHAMADO_AGEND} • Chamado:** {self.modal.chamado.value}")
 
         if self.modal.data_agendamento.value and self.modal.data_agendamento.value.strip():
             mensagem.append(f"**{EMOJI_DATA_AGEND} • Data Prevista:** {self.modal.data_agendamento.value}")
-        
+            
         if self.modal.observacao.value and self.modal.observacao.value.strip():
             mensagem.append(f"**{EMOJI_OBS_AGEND} • Observação:** {self.modal.observacao.value}")
 
@@ -997,7 +997,7 @@ class InicialView(discord.ui.View):
 class ScheduleUpdateCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-    
+        
     async def beta99(self, interaction: discord.Interaction):
         """Comando para registrar uma nova versão beta 99"""
         try:

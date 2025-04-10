@@ -53,6 +53,15 @@ class HelpCog(commands.Cog):
                               "• Acompanhe o status do seu reporte",
                         inline=False
                     )
+                    embed.add_field(
+                        name="🔄 Outros comandos relacionados",
+                        value="• `/recarregar_config_glassfish` - Recarrega as configurações do Glassfish (apenas TI)\n"
+                              "• `/verificacao_forcada_glassfish` - Força verificação de timeout (apenas TI)\n"
+                              "• `/configurar_timeout_glassfish` - Configura tempo máximo de uso (apenas TI)\n"
+                              "• `/obter_timeout_glassfish` - Exibe configurações atuais de timeout\n"
+                              "• `/liberar_todos_glassfish` - Libera todos os serviços em uso (apenas TI)",
+                        inline=False
+                    )
 
                 elif comando == "agendamento":
                     embed = discord.Embed(
@@ -149,6 +158,122 @@ class HelpCog(commands.Cog):
                               "• Documentação do projeto",
                         inline=False
                     )
+                
+                elif comando == "recarregar_config_glassfish":
+                    embed = discord.Embed(
+                        title="🔄 Comando: /recarregar_config_glassfish",
+                        description="Recarrega as configurações do Glassfish do arquivo.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/recarregar_config_glassfish` para atualizar as configurações de timeout e outros parâmetros.",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Observações",
+                        value="• As configurações são carregadas do arquivo de configuração\n"
+                              "• Afeta as configurações de timeout e intervalos de verificação",
+                        inline=False
+                    )
+                
+                elif comando == "verificacao_forcada_glassfish":
+                    embed = discord.Embed(
+                        title="🔍 Comando: /verificacao_forcada_glassfish",
+                        description="Força a verificação de timeout dos serviços Glassfish imediatamente.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/verificacao_forcada_glassfish` para executar manualmente o processo de verificação.",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Observações",
+                        value="• Verifica serviços em uso por muito tempo\n"
+                              "• Libera automaticamente serviços cujo timeout expirou\n"
+                              "• Envia notificações para os usuários quando necessário",
+                        inline=False
+                    )
+                
+                elif comando == "configurar_timeout_glassfish":
+                    embed = discord.Embed(
+                        title="⚙️ Comando: /configurar_timeout_glassfish",
+                        description="Configura o tempo máximo de uso dos serviços Glassfish.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/configurar_timeout_glassfish horas:<tempo> lembrete:<intervalo>`\n"
+                              "• `horas`: Número de horas após o qual o serviço será liberado automaticamente\n"
+                              "• `lembrete`: (Opcional) Intervalo em horas entre lembretes para o usuário",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Observações",
+                        value="• O tempo máximo deve estar entre 1 e 72 horas\n"
+                              "• O intervalo de lembretes deve ser menor que o tempo máximo\n"
+                              "• As configurações são salvas permanentemente",
+                        inline=False
+                    )
+                
+                elif comando == "obter_timeout_glassfish":
+                    embed = discord.Embed(
+                        title="⏱️ Comando: /obter_timeout_glassfish",
+                        description="Mostra as configurações atuais de timeout dos serviços Glassfish.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/obter_timeout_glassfish` para ver as configurações atuais.",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Observações",
+                        value="• Exibe o tempo máximo de uso sem confirmação\n"
+                              "• Mostra o intervalo entre lembretes\n"
+                              "• Informa a frequência de verificação automatizada",
+                        inline=False
+                    )
+
+                elif comando == "liberar_todos_glassfish":
+                    embed = discord.Embed(
+                        title="🔄 Comando: /liberar_todos_glassfish",
+                        description="Libera todos os serviços Glassfish que estão em uso de uma só vez.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/liberar_todos_glassfish` para liberar todos os serviços em uso.",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Observações",
+                        value="• Libera todos os serviços Glassfish que estão em uso\n"
+                              "• Útil para situações de manutenção ou reinicialização dos servidores\n"
+                              "• Registra automaticamente quais serviços foram liberados e quem os estava usando",
+                        inline=False
+                    )
 
                 else:
                     await interaction.response.send_message(
@@ -207,7 +332,13 @@ class HelpCog(commands.Cog):
                     name="🔗 Links Úteis",
                     value="• 📚 Documentação: https://github.com/Abnerlucasm/bot_discord_neo\n"
                           "• 💡 Sugestões? Entre em contato com a equipe\n"
-                          "• ❓ Dúvidas? Use /ajuda <comando> para mais detalhes",
+                          "• ❓ Dúvidas? Use /ajuda <comando> para mais detalhes\n"
+                          "• 🛠️ Comandos administrativos:\n"
+                          "  - `/recarregar_config_glassfish` - Recarrega configurações\n"
+                          "  - `/verificacao_forcada_glassfish` - Força verificação de timeout\n"
+                          "  - `/configurar_timeout_glassfish` - Configura tempo máximo de uso\n"
+                          "  - `/obter_timeout_glassfish` - Exibe configurações de timeout\n"
+                          "  - `/liberar_todos_glassfish` - Libera todos os serviços em uso",
                     inline=False
                 )
 

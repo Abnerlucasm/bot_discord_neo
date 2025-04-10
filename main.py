@@ -91,6 +91,8 @@ class Bot(commands.Bot):
                 callback=schedule_cog.atualizacao
             ))
             
+            # Os comandos do Glassfish são registrados diretamente no cog
+            
             logging.info("Todos os cogs foram carregados com sucesso")
         except Exception as e:
             logging.error(f"Erro ao carregar cogs: {str(e)}")

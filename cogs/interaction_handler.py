@@ -4,6 +4,9 @@ import re
 import asyncio
 from cogs.persistence import get_instance_persistence
 
+# Emoji para status de agendamento
+EMOJI_STATUS_AGEND = "<:discotoolsxyzicon1:1331628487202705554>"
+
 # Importa as classes necessárias de schedule_update.py
 try:
     from cogs.schedule_update import (
