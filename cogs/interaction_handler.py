@@ -544,7 +544,9 @@ def setup_interaction_handler(bot):
     async def on_ready():
         # Dá um pequeno delay para garantir que tudo esteja carregado
         await asyncio.sleep(1)
-        await restore_views(bot)
+        logging.info("Restaurando views após o bot estar pronto")
+        result = await restore_views(bot)
+        logging.info(f"Resultado da restauração de views: {'Sucesso' if result else 'Falha'}")
     
     @bot.event
     async def on_interaction(interaction):
@@ -554,7 +556,7 @@ def setup_interaction_handler(bot):
                 return
 
             # Log para diagnóstico
-            logging.info(f"Interação detectada - custom_id: {interaction.data.get('custom_id')}")
+            logging.info(f"Interação detectada de {interaction.user.name} - custom_id: {interaction.data.get('custom_id')}")
             
             # Checagem para botões específicos do agendamento e notificações
             custom_id = interaction.data.get('custom_id', '')

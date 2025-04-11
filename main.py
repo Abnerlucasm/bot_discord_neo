@@ -65,7 +65,8 @@ class Bot(commands.Bot):
         
         # Carrega os cogs
         try:
-            await self.add_cog(GlassfishCog(self))
+            glassfish_cog = GlassfishCog(self)
+            await self.add_cog(glassfish_cog)
             await self.add_cog(HelpCog(self))
             
             # Criamos manualmente o cog e os comandos
@@ -91,7 +92,39 @@ class Bot(commands.Bot):
                 callback=schedule_cog.atualizacao
             ))
             
-            # Os comandos do Glassfish são registrados diretamente no cog
+            # Garantir que todos os comandos do GlassfishCog estão registrados
+            glassfish_commands = [
+                glassfish_cog.glassfish,
+                glassfish_cog.recarregar_config_glassfish,
+                glassfish_cog.verificacao_forcada_glassfish,
+                glassfish_cog.configurar_timeout_glassfish,
+                glassfish_cog.obter_timeout_glassfish,
+                glassfish_cog.relatorio_glassfish,
+                glassfish_cog.adicionar_glassfish,
+                glassfish_cog.editar_glassfish,
+                glassfish_cog.remover_glassfish,
+                glassfish_cog.liberar_todos_glassfish,
+                glassfish_cog.testar_lembrete_glassfish
+            ]
+            
+            # Registra explicitamente cada comando do Glassfish
+            for cmd in glassfish_commands:
+                try:
+                    cmd_name = cmd.qualified_name
+                    cmd_exists = any(registered_cmd.name == cmd_name for registered_cmd in self.tree.get_commands())
+                    
+                    if not cmd_exists:
+                        self.tree.add_command(cmd)
+                        logging.info(f"Comando {cmd_name} registrado manualmente")
+                except Exception as cmd_error:
+                    logging.error(f"Erro ao registrar comando: {str(cmd_error)}")
+            
+            # Tenta sincronizar logo no início
+            try:
+                await self.tree.sync()
+                logging.info("Comandos sincronizados no setup_hook")
+            except Exception as sync_error:
+                logging.error(f"Erro ao sincronizar comandos no setup_hook: {str(sync_error)}")
             
             logging.info("Todos os cogs foram carregados com sucesso")
         except Exception as e:

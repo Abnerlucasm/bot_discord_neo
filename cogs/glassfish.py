@@ -554,7 +554,46 @@ class GlassfishCog(commands.Cog):
                 f"❌ Ocorreu um erro ao liberar os serviços: {str(e)}",
                 ephemeral=True
             )
+    
+    @app_commands.command(name="testar_lembrete_glassfish", description="Envia um lembrete de teste para um serviço específico (apenas desenvolvimento)")
+    @app_commands.describe(
+        simular_tempo="Simular quantas horas de uso do serviço"
+    )
+    async def testar_lembrete_glassfish(self, interaction: discord.Interaction, simular_tempo: int = 3):
+        """
+        Envia um lembrete de teste para um serviço específico.
+        Este comando só pode ser executado por usuários com o cargo de TI.
+        Útil para testar o sistema de lembretes sem precisar esperar o tempo real.
+        """
+        try:
+            logging.info(f"Comando testar_lembrete_glassfish executado por {interaction.user.name}")
+            
+            # Verifica se o usuário tem permissão (cargo de TI)
+            is_ti = any(role.id == CARGO_TI_ID for role in interaction.user.roles)
+            if not is_ti:
+                await interaction.response.send_message(
+                    "❌ Apenas usuários com cargo de TI podem executar este comando.",
+                    ephemeral=True
+                )
+                logging.warning(f"Usuário {interaction.user.name} tentou executar testar_lembrete_glassfish sem permissão")
+                return
         
+            # Mostra o seletor de serviços
+            view = TestarLembreteView(self.bot.servicos_config, simular_tempo)
+            await interaction.response.send_message(
+                "**Selecione o serviço para testar o lembrete:**\n" +
+                "Apenas serviços em uso são mostrados.",
+                view=view,
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            logging.error(f"Erro ao iniciar teste de lembrete: {str(e)}")
+            await interaction.response.send_message(
+                f"❌ Ocorreu um erro ao iniciar o teste: {str(e)}",
+                ephemeral=True
+            )
+    
     def cog_unload(self):
         # Para o loop quando o cog for descarregado
         self.check_services_loop.cancel()
@@ -608,7 +647,7 @@ class GlassfishCog(commands.Cog):
             logging.error(f"Erro ao salvar configurações no arquivo {config_file}: {str(e)}")
             return False
         
-    @tasks.loop(hours=1)
+    @tasks.loop(minutes=15)  # Verifica a cada 15 minutos em vez de 1 hora
     async def check_services_loop(self):
         """Loop para verificar o timeout dos serviços"""
         try:
@@ -624,10 +663,13 @@ class GlassfishCog(commands.Cog):
 
             agora = datetime.datetime.now()
             alteracoes = False
+            servicos_verificados = 0
+            servicos_liberados = 0
             
             # Verifica cada serviço
             for servico_id, config in servicos_config.items():
                 if config["status"] == "em uso" and "usage_data" in config:
+                    servicos_verificados += 1
                     try:
                         # Converte os dados de uso
                         usage_data_dict = config["usage_data"]
@@ -637,35 +679,85 @@ class GlassfishCog(commands.Cog):
                         # Calcula o tempo em uso
                         horas_em_uso = (agora - ultimo_uso).total_seconds() / 3600
                         
+                        # Formatação para exibir horas e minutos
+                        segundos_em_uso = (agora - ultimo_uso).total_seconds()
+                        horas_formatadas = int(segundos_em_uso / 3600)
+                        minutos_formatados = int((segundos_em_uso % 3600) / 60)
+                        tempo_formatado = f"{horas_formatadas} horas e {minutos_formatados} minutos"
+                        
                         # Verifica último check se existir
                         ultima_verificacao = None
                         if usage_data_dict.get("last_check"):
-                            ultima_verificacao = datetime.datetime.fromisoformat(usage_data_dict["last_check"])
-                            horas_desde_verificacao = (agora - ultima_verificacao).total_seconds() / 3600
+                            try:
+                                ultima_verificacao = datetime.datetime.fromisoformat(usage_data_dict["last_check"])
+                                horas_desde_verificacao = (agora - ultima_verificacao).total_seconds() / 3600
+                            except (ValueError, TypeError) as e:
+                                logging.error(f"Erro ao processar última verificação: {str(e)}")
+                                horas_desde_verificacao = horas_em_uso
                         else:
                             horas_desde_verificacao = horas_em_uso
                             
                         # Verifica último lembrete se existir
                         ultimo_lembrete = None
                         if usage_data_dict.get("last_reminder"):
-                            ultimo_lembrete = datetime.datetime.fromisoformat(usage_data_dict["last_reminder"])
-                            horas_desde_lembrete = (agora - ultimo_lembrete).total_seconds() / 3600
+                            try:
+                                ultimo_lembrete = datetime.datetime.fromisoformat(usage_data_dict["last_reminder"])
+                                horas_desde_lembrete = (agora - ultimo_lembrete).total_seconds() / 3600
+                            except (ValueError, TypeError) as e:
+                                logging.error(f"Erro ao processar último lembrete: {str(e)}")
+                                horas_desde_lembrete = horas_em_uso
                         else:
                             horas_desde_lembrete = horas_em_uso
                         
                         logging.info(f"Serviço {servico_id} em uso por {config['usuario']} há {horas_em_uso:.1f} horas")
                         
                         # Timeout automático após tempo_maximo_uso horas sem verificação
+                        # OU após lembrete_intervalo horas sem resposta ao lembrete
+                        deve_liberar = False
+                        motivo_liberacao = ""
+                        
+                        # Formatação do tempo de verificação
+                        segundos_verificacao = horas_desde_verificacao * 3600
+                        verificacao_horas = int(segundos_verificacao / 3600)
+                        verificacao_minutos = int((segundos_verificacao % 3600) / 60)
+                        verificacao_formatado = f"{verificacao_horas} horas e {verificacao_minutos} minutos"
+                        
+                        # Formatação do tempo desde o lembrete
+                        segundos_lembrete = horas_desde_lembrete * 3600
+                        lembrete_horas = int(segundos_lembrete / 3600)
+                        lembrete_minutos = int((segundos_lembrete % 3600) / 60)
+                        lembrete_formatado = f"{lembrete_horas} horas e {lembrete_minutos} minutos"
+                        
                         if horas_desde_verificacao > self.tempo_maximo_uso:
+                            deve_liberar = True
+                            motivo_liberacao = f"após {verificacao_formatado} sem verificação"
+                        elif ultimo_lembrete and not ultima_verificacao:
+                            # Se há lembrete mas nunca houve verificação
+                            if horas_desde_lembrete > self.lembrete_intervalo:
+                                deve_liberar = True
+                                motivo_liberacao = f"após {lembrete_formatado} sem resposta ao lembrete"
+                        elif ultimo_lembrete and ultima_verificacao:
+                            # Se o último lembrete é mais recente que a última verificação
+                            if ultimo_lembrete > ultima_verificacao and horas_desde_lembrete > self.lembrete_intervalo:
+                                deve_liberar = True
+                                motivo_liberacao = f"após {lembrete_formatado} sem resposta ao lembrete"
+                        
+                        if deve_liberar:
+                            # Formatação para exibir horas e minutos do tempo total de uso
+                            segundos_em_uso = (agora - ultimo_uso).total_seconds()
+                            horas_formatadas = int(segundos_em_uso / 3600)
+                            minutos_formatados = int((segundos_em_uso % 3600) / 60)
+                            tempo_uso = f"{horas_formatadas} horas e {minutos_formatados} minutos"
+                            
                             # Libera o serviço automaticamente
-                            logging.warning(f"Timeout automático para o serviço {servico_id} - {config['nome']} após {horas_desde_verificacao:.1f} horas sem verificação")
+                            logging.warning(f"Timeout automático para o serviço {servico_id} - {config['nome']} {motivo_liberacao}")
                             
                             # Notifica no canal de logs
                             channel = self.bot.get_channel(LOGS_CHANNEL_ID)
                             if channel:
                                 await channel.send(
-                                    f"⏰ **Timeout Automático**: O serviço **{config['nome']}** foi liberado automaticamente após {int(horas_desde_verificacao)} horas sem verificação. " +
-                                    f"Estava sendo usado por **{config['usuario']}**."
+                                    f"⏰ **Timeout Automático**: O serviço **{config['nome']}** foi liberado automaticamente {motivo_liberacao}. " +
+                                    f"Estava sendo usado por **{config['usuario']}** por {tempo_uso}."
                                 )
                             
                             # Atualiza o estado do serviço
@@ -685,10 +777,16 @@ class GlassfishCog(commands.Cog):
                                 # Cria uma view com botões para confirmar o uso ou liberar
                                 view = CheckView(servico_id, self.bot.servicos_config)
                                 
+                                # Calcula tempo em horas e minutos para exibição mais precisa
+                                segundos_em_uso = (agora - ultimo_uso).total_seconds()
+                                horas_formatadas = int(segundos_em_uso / 3600)
+                                minutos_formatados = int((segundos_em_uso % 3600) / 60)
+                                tempo_formatado = f"{horas_formatadas} horas e {minutos_formatados} minutos"
+                                
                                 # Envia mensagem para o usuário
                                 await user.send(
                                     f"⚠️ **Lembrete de uso do Glassfish**\n" +
-                                    f"Você está usando o serviço **{config['nome']}** há {int(horas_em_uso)} horas.\n" +
+                                    f"Você está usando o serviço **{config['nome']}** há {tempo_formatado}.\n" +
                                     f"Por favor, confirme se ainda está utilizando este serviço ou libere-o se não estiver mais usando.",
                                     view=view
                                 )
@@ -707,6 +805,10 @@ class GlassfishCog(commands.Cog):
                     except Exception as e:
                         logging.error(f"Erro ao processar verificação para o serviço {servico_id}: {str(e)}")
             
+            # Log do resultado da verificação
+            if servicos_verificados > 0:
+                logging.info(f"Verificação concluída: {servicos_verificados} serviços verificados, {servicos_liberados} liberados")
+            
             # Salva as alterações se houver mudanças
             if alteracoes:
                 try:
@@ -718,7 +820,7 @@ class GlassfishCog(commands.Cog):
                     await self.refresh_persistent_message()
                 except Exception as e:
                     logging.error(f"Erro ao salvar alterações em services.json: {str(e)}")
-                    
+            
         except Exception as e:
             logging.error(f"Erro geral na verificação de timeout: {str(e)}")
             
@@ -726,7 +828,13 @@ class GlassfishCog(commands.Cog):
     async def before_check_services_loop(self):
         """Espera o bot estar pronto antes de iniciar o loop"""
         await self.bot.wait_until_ready()
-        await asyncio.sleep(60)  # Espera 1 minuto após o bot iniciar para começar as verificações
+        
+        # Executa uma verificação imediata ao iniciar
+        logging.info("Executando verificação inicial de serviços")
+        await self.check_services_loop()
+        
+        # Espera 15 minutos antes de começar o loop regular
+        await asyncio.sleep(900)  # 15 minutos em segundos
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -738,8 +846,8 @@ class GlassfishCog(commands.Cog):
 
         # Sincroniza os comandos para garantir que apareçam
         try:
-            # Adicionando comandos manualmente ao bot.tree
-            commands = [
+            # Lista de todos os comandos que devem ser registrados
+            app_commands_list = [
                 self.recarregar_config_glassfish,
                 self.glassfish,
                 self.verificacao_forcada_glassfish,
@@ -749,15 +857,40 @@ class GlassfishCog(commands.Cog):
                 self.adicionar_glassfish,
                 self.editar_glassfish,
                 self.remover_glassfish,
-                self.liberar_todos_glassfish
+                self.liberar_todos_glassfish,
+                self.testar_lembrete_glassfish
             ]
             
-            # Sincroniza comandos
-            await self.bot.tree.sync()
-            logging.info("Comandos sincronizados com sucesso")
+            # Adiciona explicitamente cada comando que não esteja já registrado
+            added_commands = []
+            for cmd in app_commands_list:
+                cmd_name = cmd.qualified_name
+                
+                # Verifica se o comando já existe na árvore principal
+                cmd_exists = any(registered_cmd.name == cmd_name for registered_cmd in self.bot.tree.get_commands())
+                
+                if not cmd_exists:
+                    try:
+                        # Se não existe, adiciona à árvore de comandos
+                        self.bot.tree.add_command(cmd)
+                        added_commands.append(cmd_name)
+                        logging.info(f"Comando {cmd_name} adicionado à árvore de comandos")
+                    except Exception as cmd_err:
+                        logging.error(f"Erro ao adicionar comando {cmd_name}: {str(cmd_err)}")
+            
+            # Sincroniza a árvore de comandos
+            sync_result = await self.bot.tree.sync()
+            sync_names = [cmd.name for cmd in sync_result]
+            
+            if added_commands:
+                logging.info(f"Comandos adicionados: {', '.join(added_commands)}")
+            
+            logging.info(f"Comandos sincronizados com sucesso: {', '.join(sync_names)}")
         except Exception as e:
             logging.error(f"Erro ao sincronizar comandos: {str(e)}")
-            
+            import traceback
+            logging.error(traceback.format_exc())
+    
     @app_commands.command(name="glassfish", description="Lista os serviços disponíveis")
     async def glassfish(self, interaction: discord.Interaction):
         try:
@@ -974,54 +1107,56 @@ class GlassfishCog(commands.Cog):
                 if config["status"] == "em uso":
                     # Calcula o tempo de uso mesmo sem usage_data disponível
                     tempo_uso = "Tempo desconhecido"
+                    ultima_confirmacao = "Nunca confirmado"
+                    ultimo_lembrete = "Nenhum lembrete enviado"
+                    
                     if "usage_data" in config:
                         try:
                             usage_data = config["usage_data"]
                             # Calcula tempo em uso
                             timestamp = datetime.datetime.fromisoformat(usage_data["timestamp"])
-                            horas_em_uso = (agora - timestamp).total_seconds() / 3600
-                            tempo_uso = f"{int(horas_em_uso)} horas"
+                            segundos_em_uso = (agora - timestamp).total_seconds()
+                            horas_em_uso = segundos_em_uso / 3600
+                            minutos_em_uso = (segundos_em_uso % 3600) / 60
+                            tempo_uso = f"{int(horas_em_uso)} horas e {int(minutos_em_uso)} minutos"
+                            
+                            # Verifica última confirmação
+                            if usage_data.get("last_check"):
+                                last_check = datetime.datetime.fromisoformat(usage_data["last_check"])
+                                segundos_desde_check = (agora - last_check).total_seconds()
+                                horas_desde_check = int(segundos_desde_check / 3600)
+                                minutos_desde_check = int((segundos_desde_check % 3600) / 60)
+                                ultima_confirmacao = f"Há {horas_desde_check} horas e {minutos_desde_check} minutos"
+                            
+                            # Verifica último lembrete
+                            if usage_data.get("last_reminder"):
+                                last_reminder = datetime.datetime.fromisoformat(usage_data["last_reminder"])
+                                segundos_desde_lembrete = (agora - last_reminder).total_seconds()
+                                horas_desde_lembrete = int(segundos_desde_lembrete / 3600)
+                                minutos_desde_lembrete = int((segundos_desde_lembrete % 3600) / 60)
+                                ultimo_lembrete = f"Há {horas_desde_lembrete} horas e {minutos_desde_lembrete} minutos"
+                                
+                                # Se recebeu lembrete mas não confirmou, ou se a última confirmação é anterior ao último lembrete
+                                if not usage_data.get("last_check") or (
+                                    last_reminder > datetime.datetime.fromisoformat(usage_data["last_check"])
+                                ):
+                                    notificados.append({
+                                        "nome": config["nome"],
+                                        "usuario": config["usuario"],
+                                        "quando": f"Há {horas_desde_lembrete} horas e {minutos_desde_lembrete} minutos",
+                                        "resposta": "Sem resposta ainda"
+                                    })
+                            
                         except Exception as e:
                             logging.error(f"Erro ao calcular tempo de uso para {servico_id}: {str(e)}")
                     
                     servico_info = {
                         "nome": config["nome"], 
                         "usuario": config["usuario"],
-                        "tempo_uso": tempo_uso
+                        "tempo_uso": tempo_uso,
+                        "ultima_confirmacao": ultima_confirmacao,
+                        "ultimo_lembrete": ultimo_lembrete
                     }
-                    
-                    # Verifica dados adicionais se disponíveis
-                    if "usage_data" in config:
-                        try:
-                            usage_data = config["usage_data"]
-                            
-                            # Verifica última confirmação
-                            if usage_data.get("last_check"):
-                                last_check = datetime.datetime.fromisoformat(usage_data["last_check"])
-                                horas_desde_check = (agora - last_check).total_seconds() / 3600
-                                servico_info["ultima_confirmacao"] = f"Há {int(horas_desde_check)} horas"
-                            else:
-                                servico_info["ultima_confirmacao"] = "Nunca confirmado"
-                                
-                            # Verifica último lembrete
-                            if usage_data.get("last_reminder"):
-                                last_reminder = datetime.datetime.fromisoformat(usage_data["last_reminder"])
-                                horas_desde_lembrete = (agora - last_reminder).total_seconds() / 3600
-                                servico_info["ultimo_lembrete"] = f"Há {int(horas_desde_lembrete)} horas"
-                                
-                                # Se recebeu lembrete mas não confirmou, adiciona à lista de notificados
-                                if not usage_data.get("last_check") or last_reminder > datetime.datetime.fromisoformat(usage_data["last_check"]):
-                                    notificados.append({
-                                        "nome": config["nome"],
-                                        "usuario": config["usuario"],
-                                        "quando": f"Há {int(horas_desde_lembrete)} horas",
-                                        "resposta": "Sem resposta ainda"
-                                    })
-                            else:
-                                servico_info["ultimo_lembrete"] = "Nenhum lembrete enviado"
-                        except Exception as e:
-                            logging.error(f"Erro ao processar dados de uso para {servico_id}: {str(e)}")
-                    
                     em_uso.append(servico_info)
             
             # Monta o relatório
@@ -1031,12 +1166,12 @@ class GlassfishCog(commands.Cog):
             resposta.append("**🔴 Serviços em Uso:**")
             if em_uso:
                 for servico in em_uso:
-                    servico_str = f"• **{servico['nome']}** - Usuário: {servico['usuario']} | Em uso por: {servico['tempo_uso']}"
-                    if "ultima_confirmacao" in servico:
-                        servico_str += f" | Última confirmação: {servico['ultima_confirmacao']}"
-                    if "ultimo_lembrete" in servico:
-                        servico_str += f" | Último lembrete: {servico['ultimo_lembrete']}"
-                    resposta.append(servico_str)
+                    resposta.append(
+                        f"• **{servico['nome']}** - Usuário: {servico['usuario']} | " +
+                        f"Em uso por: {servico['tempo_uso']} | " +
+                        f"Última confirmação: {servico['ultima_confirmacao']} | " +
+                        f"Último lembrete: {servico['ultimo_lembrete']}"
+                    )
             else:
                 resposta.append("• Nenhum serviço em uso no momento.")
             
@@ -1044,7 +1179,10 @@ class GlassfishCog(commands.Cog):
             resposta.append("\n**📨 Lembretes Enviados Sem Resposta:**")
             if notificados:
                 for notificacao in notificados:
-                    resposta.append(f"• **{notificacao['nome']}** - Usuário: {notificacao['usuario']} | Enviado: {notificacao['quando']}")
+                    resposta.append(
+                        f"• **{notificacao['nome']}** - Usuário: {notificacao['usuario']} | " +
+                        f"Lembrete enviado: {notificacao['quando']} | {notificacao['resposta']}"
+                    )
             else:
                 resposta.append("• Nenhum lembrete pendente de resposta.")
             
@@ -1879,6 +2017,262 @@ class GlassfishEditModal(discord.ui.Modal, title='Editar Serviço Glassfish'):
                 f"Ocorreu um erro ao editar o serviço: {str(e)}",
                 ephemeral=True
             )
-
     # Comando liberar_todos_glassfish já foi definido no início da classe GlassfishCog
     # Esta duplicação foi removida para evitar conflitos
+
+    @app_commands.command(name="testar_lembrete_glassfish", description="Envia um lembrete de teste para um serviço específico (apenas desenvolvimento)")
+    @app_commands.describe(
+        servico_id="ID do serviço para testar (ex: 97-1)",
+        simular_tempo="Simular quantas horas de uso do serviço"
+    )
+    async def testar_lembrete_glassfish(self, interaction: discord.Interaction, servico_id: str, simular_tempo: int = 3):
+        """
+        Envia um lembrete de teste para um serviço específico.
+        Este comando só pode ser executado por usuários com o cargo de TI.
+        Útil para testar o sistema de lembretes sem precisar esperar o tempo real.
+        """
+        try:
+            logging.info(f"Comando testar_lembrete_glassfish executado por {interaction.user.name} para serviço {servico_id}")
+            
+            # Verifica se o usuário tem permissão (cargo de TI)
+            is_ti = any(role.id == CARGO_TI_ID for role in interaction.user.roles)
+            if not is_ti:
+                await interaction.response.send_message(
+                    "❌ Apenas usuários com cargo de TI podem executar este comando.",
+                    ephemeral=True
+                )
+                logging.warning(f"Usuário {interaction.user.name} tentou executar testar_lembrete_glassfish sem permissão")
+                return
+            
+            # Verifica se o serviço existe
+            if servico_id not in self.bot.servicos_config:
+                await interaction.response.send_message(
+                    f"❌ Serviço com ID '{servico_id}' não encontrado.",
+                    ephemeral=True
+                )
+                return
+                
+            config = self.bot.servicos_config[servico_id]
+            
+            # Verifica se o serviço está em uso
+            if config["status"] != "em uso":
+                await interaction.response.send_message(
+                    f"❌ O serviço **{config['nome']}** não está em uso. Para testar, use o serviço primeiro.",
+                    ephemeral=True
+                )
+                return
+                
+            # Prepara os dados para o teste
+            usage_data_dict = config.get("usage_data", {})
+            if not usage_data_dict:
+                await interaction.response.send_message(
+                    f"❌ O serviço **{config['nome']}** não tem dados de uso. Use o serviço normalmente primeiro.",
+                    ephemeral=True
+                )
+                return
+                
+            # Obtem o user_id
+            user_id = usage_data_dict.get("user_id")
+            if not user_id:
+                await interaction.response.send_message(
+                    f"❌ Não foi possível identificar o usuário do serviço **{config['nome']}**.",
+                    ephemeral=True
+                )
+                return
+                
+            # Prepara para enviar o lembrete
+            await interaction.response.defer(ephemeral=True)
+            
+            try:
+                # Tenta obter o usuário para enviar DM
+                user = await self.bot.fetch_user(int(user_id))
+                
+                # Cria uma view com botões para confirmar o uso ou liberar
+                view = CheckView(servico_id, self.bot.servicos_config)
+                
+                # Calcula tempo simulado em horas e minutos
+                horas_formatadas = simular_tempo
+                minutos_formatados = 0
+                tempo_uso = f"{horas_formatadas} horas e {minutos_formatados} minutos (simulação)"
+                
+                # Envia mensagem para o usuário
+                await user.send(
+                    f"⚠️ **Lembrete de uso do Glassfish (TESTE)**\n" +
+                    f"Você está usando o serviço **{config['nome']}** há {tempo_uso}.\n" +
+                    f"Por favor, confirme se ainda está utilizando este serviço ou libere-o se não estiver mais usando.\n\n" +
+                    f"**NOTA**: Este é um lembrete de TESTE enviado por {interaction.user.name}.",
+                    view=view
+                )
+                
+                # Atualiza o timestamp do último lembrete
+                usage_data = UsageData.from_dict(usage_data_dict)
+                usage_data.update_reminder()
+                config["usage_data"] = usage_data.to_dict()
+                
+                # Salva as alterações
+                with open("services.json", "w", encoding="utf-8") as file:
+                    json.dump(self.bot.servicos_config, file, indent=4)
+                
+                # Confirma para o usuário que o lembrete foi enviado
+                await interaction.followup.send(
+                    f"✅ Lembrete de teste enviado com sucesso para o usuário `{config['usuario']}` sobre o serviço **{config['nome']}**.\n"
+                    f"Tempo simulado: {simular_tempo} horas",
+                    ephemeral=True
+                )
+                
+                # Log
+                logging.info(f"Lembrete de teste enviado por {interaction.user.name} para {config['usuario']} sobre o serviço {servico_id}")
+                
+            except Exception as e:
+                logging.error(f"Erro ao enviar lembrete de teste para o usuário {user_id}: {str(e)}")
+                await interaction.followup.send(
+                    f"❌ Erro ao enviar lembrete de teste: {str(e)}",
+                    ephemeral=True
+                )
+                
+        except Exception as e:
+            logging.error(f"Erro ao testar lembrete: {str(e)}")
+            await interaction.followup.send(
+                f"❌ Ocorreu um erro ao testar lembrete: {str(e)}",
+                ephemeral=True
+            )
+
+# Adicionar antes da definição do comando testar_lembrete_glassfish
+class TestarLembreteSelect(discord.ui.Select):
+    def __init__(self, servicos_config, simular_tempo: int):
+        self.servicos_config = servicos_config
+        self.simular_tempo = simular_tempo
+        
+        # Prepara as opções apenas com serviços em uso
+        options = []
+        for key, config in servicos_config.items():
+            if config["status"] == "em uso":
+                # Calcula o tempo em uso para mostrar na descrição
+                tempo_uso = "Tempo desconhecido"
+                if "usage_data" in config:
+                    try:
+                        usage_data = config["usage_data"]
+                        timestamp = datetime.datetime.fromisoformat(usage_data["timestamp"])
+                        segundos_em_uso = (datetime.datetime.now() - timestamp).total_seconds()
+                        horas_em_uso = int(segundos_em_uso / 3600)
+                        minutos_em_uso = int((segundos_em_uso % 3600) / 60)
+                        tempo_uso = f"Em uso há {horas_em_uso}h{minutos_em_uso}m"
+                    except:
+                        pass
+                
+                options.append(
+                    discord.SelectOption(
+                        label=f"{config['nome']}",
+                        value=key,
+                        description=f"Em uso por: {config['usuario']} | {tempo_uso}",
+                        emoji="🔴"
+                    )
+                )
+        
+        # Se não houver serviços em uso, adiciona uma opção informativa
+        if not options:
+            options = [discord.SelectOption(
+                label="Nenhum serviço em uso",
+                value="none",
+                description="Não há serviços disponíveis para testar",
+                emoji="ℹ️"
+            )]
+        
+        super().__init__(
+            placeholder="Selecione um serviço para testar o lembrete...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.values[0] == "none":
+            await interaction.response.send_message(
+                "Não há serviços em uso para testar o lembrete.",
+                ephemeral=True
+            )
+            return
+        
+        servico_id = self.values[0]
+        config = self.servicos_config[servico_id]
+        
+        try:
+            # Prepara os dados para o teste
+            usage_data_dict = config.get("usage_data", {})
+            if not usage_data_dict:
+                await interaction.response.send_message(
+                    f"❌ O serviço **{config['nome']}** não tem dados de uso. Use o serviço normalmente primeiro.",
+                    ephemeral=True
+                )
+                return
+            
+            # Obtem o user_id
+            user_id = usage_data_dict.get("user_id")
+            if not user_id:
+                await interaction.response.send_message(
+                    f"❌ Não foi possível identificar o usuário do serviço **{config['nome']}**.",
+                    ephemeral=True
+                )
+                return
+            
+            # Prepara para enviar o lembrete
+            await interaction.response.defer(ephemeral=True)
+            
+            try:
+                # Tenta obter o usuário para enviar DM
+                user = await interaction.client.fetch_user(int(user_id))
+                
+                # Cria uma view com botões para confirmar o uso ou liberar
+                view = CheckView(servico_id, self.servicos_config)
+                
+                # Calcula tempo simulado em horas e minutos
+                horas_formatadas = self.simular_tempo
+                minutos_formatados = 0
+                tempo_uso = f"{horas_formatadas} horas e {minutos_formatados} minutos (simulação)"
+                
+                # Envia mensagem para o usuário
+                await user.send(
+                    f"⚠️ **Lembrete de uso do Glassfish (TESTE)**\n" +
+                    f"Você está usando o serviço **{config['nome']}** há {tempo_uso}.\n" +
+                    f"Por favor, confirme se ainda está utilizando este serviço ou libere-o se não estiver mais usando.\n\n" +
+                    f"**NOTA**: Este é um lembrete de TESTE enviado por {interaction.user.name}.",
+                    view=view
+                )
+                
+                # Atualiza o timestamp do último lembrete
+                usage_data = UsageData.from_dict(usage_data_dict)
+                usage_data.update_reminder()
+                config["usage_data"] = usage_data.to_dict()
+                
+                # Salva as alterações
+                with open("services.json", "w", encoding="utf-8") as file:
+                    json.dump(self.servicos_config, file, indent=4)
+                
+                # Confirma para o usuário que o lembrete foi enviado
+                await interaction.followup.send(
+                    f"✅ Lembrete de teste enviado com sucesso para o usuário `{config['usuario']}` sobre o serviço **{config['nome']}**.\n" +
+                    f"Tempo simulado: {self.simular_tempo} horas",
+                    ephemeral=True
+                )
+                
+                # Log
+                logging.info(f"Lembrete de teste enviado por {interaction.user.name} para {config['usuario']} sobre o serviço {servico_id}")
+                
+            except Exception as e:
+                logging.error(f"Erro ao enviar lembrete de teste para o usuário {user_id}: {str(e)}")
+                await interaction.followup.send(
+                    f"❌ Erro ao enviar lembrete de teste: {str(e)}",
+                    ephemeral=True
+                )
+                
+        except Exception as e:
+            logging.error(f"Erro ao testar lembrete: {str(e)}")
+            await interaction.followup.send(
+                f"❌ Ocorreu um erro ao testar lembrete: {str(e)}",
+                ephemeral=True
+            )
+
+class TestarLembreteView(discord.ui.View):
+    def __init__(self, servicos_config, simular_tempo: int):
+        super().__init__(timeout=None)
+        self.add_item(TestarLembreteSelect(servicos_config, simular_tempo))

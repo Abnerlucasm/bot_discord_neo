@@ -7,8 +7,8 @@
         "persistent_id": 1328398423241789521
     },
     "timeout": {
-        "tempo_maximo_uso": 8,
-        "verificar_intervalo": 2,
-        "lembrete_intervalo": 4
+        "tempo_maximo_uso": 2,
+        "verificar_intervalo": 1,
+        "lembrete_intervalo": 1
     }
-} 
+}

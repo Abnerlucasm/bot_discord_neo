@@ -275,6 +275,33 @@ class HelpCog(commands.Cog):
                         inline=False
                     )
 
+                elif comando == "testar_lembrete_glassfish":
+                    embed = discord.Embed(
+                        title="⏱️ Comando: /testar_lembrete_glassfish",
+                        description="Envia um lembrete de teste para um serviço específico.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/testar_lembrete_glassfish servico_id:<id> simular_tempo:<horas>`\n"
+                              "• `servico_id`: ID do serviço para testar (ex: 97-1)\n"
+                              "• `simular_tempo`: (Opcional) Tempo simulado de uso em horas. Padrão: 3",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Observações",
+                        value="• O serviço precisa estar em uso para o teste funcionar\n"
+                              "• Envia uma mensagem direta para o usuário que está usando o serviço\n"
+                              "• Útil para testar o sistema de lembretes sem esperar o tempo real\n"
+                              "• Apenas para fins de desenvolvimento e testes",
+                        inline=False
+                    )
+
                 else:
                     await interaction.response.send_message(
                         f"❌ Comando '{comando}' não encontrado. Use `/ajuda` para ver a lista de comandos disponíveis.",
