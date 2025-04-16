@@ -39,6 +39,7 @@ class UsageData:
         self.timestamp = timestamp or datetime.datetime.now()
         self.last_check = None
         self.last_reminder = None
+        self.extension_count = 0  # Contador de extensões de tempo solicitadas
         
     def update_timestamp(self):
         """Atualiza o timestamp para o momento atual"""
@@ -52,6 +53,11 @@ class UsageData:
         """Registra que um lembrete foi enviado"""
         self.last_reminder = datetime.datetime.now()
         
+    def increment_extension(self):
+        """Incrementa o contador de extensões de tempo"""
+        self.extension_count += 1
+        return self.extension_count
+        
     def to_dict(self):
         """Converte os dados para um dicionário para salvar em JSON"""
         return {
@@ -59,7 +65,8 @@ class UsageData:
             "user_id": self.user_id,
             "timestamp": self.timestamp.isoformat(),
             "last_check": self.last_check.isoformat() if self.last_check else None,
-            "last_reminder": self.last_reminder.isoformat() if self.last_reminder else None
+            "last_reminder": self.last_reminder.isoformat() if self.last_reminder else None,
+            "extension_count": self.extension_count
         }
         
     @classmethod
@@ -71,6 +78,7 @@ class UsageData:
             instance.last_check = datetime.datetime.fromisoformat(data["last_check"])
         if data.get("last_reminder"):
             instance.last_reminder = datetime.datetime.fromisoformat(data["last_reminder"])
+        instance.extension_count = data.get("extension_count", 0)
         return instance
 
 class ProblemReportModal(discord.ui.Modal, title="Reportar Problema"):
@@ -263,6 +271,11 @@ class ActionButtons(discord.ui.View):
         usage_data = UsageData(interaction.user.name, interaction.user.id)
         config["usage_data"] = usage_data.to_dict()
         
+        # Limpa a flag de notificação de timeout para permitir novas notificações
+        if "notificacao_timeout" in config:
+            del config["notificacao_timeout"]
+            logging.info(f"Flag de notificação de timeout removida para {config['nome']}")
+        
         self.salvar_em_json()
         channel = interaction.guild.get_channel(LOGS_CHANNEL_ID)
         if channel:
@@ -318,6 +331,11 @@ class ActionButtons(discord.ui.View):
         if "usage_data" in config:
             del config["usage_data"]
             
+        # Limpa a flag de notificação de timeout
+        if "notificacao_timeout" in config:
+            del config["notificacao_timeout"]
+            logging.info(f"Flag de notificação de timeout removida para {config['nome']}")
+            
         config["status"] = "disponível"
         config["usuario"] = None
         self.salvar_em_json()
@@ -366,21 +384,107 @@ class ConfirmUseButton(discord.ui.Button):
             )
             return
         
+        # Obtém o objeto de cog para acessar as configurações
+        cog = interaction.client.get_cog("GlassfishCog")
+        max_extensoes = 3  # Valor padrão de segurança
+        
+        if cog:
+            max_extensoes = cog.max_extensoes
+        
         # Atualiza os dados de uso
         if "usage_data" in config:
             try:
                 usage_data = UsageData.from_dict(config["usage_data"])
+                
+                # Verifica se já passou do tempo máximo desde a última verificação
+                ultima_verificacao = usage_data.last_check
+                agora = datetime.datetime.now()
+                
+                # Se não houver verificação anterior, ou se a última verificação for muito antiga,
+                # conta como uma extensão (exceto na primeira verificação)
+                if ultima_verificacao:
+                    horas_desde_verificacao = (agora - ultima_verificacao).total_seconds() / 3600
+                    
+                    # Obtém o tempo máximo de uso configurado
+                    tempo_maximo = TEMPO_MAXIMO_USO  # Valor padrão
+                    if cog:
+                        tempo_maximo = cog.tempo_maximo_uso
+                    
+                    # Se já passou do prazo, conta como uma extensão
+                    if horas_desde_verificacao > tempo_maximo:
+                        current_count = usage_data.increment_extension()
+                        
+                        # Verifica se excedeu o limite de extensões
+                        if current_count > max_extensoes:
+                            await interaction.response.send_message(
+                                f"❌ Você já utilizou {current_count-1}/{max_extensoes} extensões permitidas e não pode mais estender o tempo de uso.\n" +
+                                f"O serviço será liberado automaticamente em breve.\n" +
+                                f"Por favor, libere o serviço manualmente ou solicite uma exceção ao setor de TI.",
+                                ephemeral=True
+                            )
+                            return
+                        else:
+                            # Informa quantas extensões já foram usadas
+                            await interaction.response.send_message(
+                                f"✅ Tempo de uso estendido! Você utilizou {current_count}/{max_extensoes} extensões permitidas.\n" +
+                                f"O prazo para uso do serviço **{config['nome']}** foi renovado. Obrigado!",
+                                ephemeral=True
+                            )
+                    else:
+                        # Confirmação normal, sem contar como extensão
+                        await interaction.response.send_message(
+                            f"✅ Você confirmou que ainda está usando o serviço **{config['nome']}**. Obrigado!",
+                            ephemeral=True
+                        )
+                else:
+                    # Primeira verificação, não conta como extensão
+                    await interaction.response.send_message(
+                        f"✅ Você confirmou que ainda está usando o serviço **{config['nome']}**. Obrigado!",
+                        ephemeral=True
+                    )
+                
+                # Atualiza o timestamp de verificação em todos os casos
                 usage_data.update_check()
                 config["usage_data"] = usage_data.to_dict()
+                
             except Exception as e:
                 logging.error(f"Erro ao atualizar dados de uso: {str(e)}")
                 # Cria novo objeto de uso se houver erro
                 usage_data = UsageData(interaction.user.name, interaction.user.id)
+                usage_data.update_check()
                 config["usage_data"] = usage_data.to_dict()
+                
+                await interaction.response.send_message(
+                    f"✅ Você confirmou que ainda está usando o serviço **{config['nome']}**. Obrigado!",
+                    ephemeral=True
+                )
         else:
             # Cria novo objeto de uso se não existir
             usage_data = UsageData(interaction.user.name, interaction.user.id)
+            usage_data.update_check()
             config["usage_data"] = usage_data.to_dict()
+            
+            await interaction.response.send_message(
+                f"✅ Você confirmou que ainda está usando o serviço **{config['nome']}**. Obrigado!",
+                ephemeral=True
+            )
+        
+        # Notifica no canal de logs sobre a confirmação
+        try:
+            channel = interaction.guild.get_channel(LOGS_CHANNEL_ID)
+            if channel and "usage_data" in config:
+                extension_count = config["usage_data"].get("extension_count", 0)
+                if extension_count > 0:
+                    await channel.send(
+                        f"🔄 **Extensão de Uso**: <@{interaction.user.id}> confirmou o uso do serviço **{config['nome']}** " +
+                        f"({extension_count}/{max_extensoes} extensões utilizadas)"
+                    )
+                else:
+                    await channel.send(
+                        f"✅ **Confirmação de Uso**: <@{interaction.user.id}> confirmou que ainda está usando o serviço **{config['nome']}**"
+                    )
+        except Exception as e:
+            logging.error(f"Erro ao enviar mensagem para o canal de logs: {str(e)}")
         
         # Salva as alterações
         try:
@@ -389,11 +493,6 @@ class ConfirmUseButton(discord.ui.Button):
             logging.info(f"Uso confirmado para o serviço {self.servico} por {interaction.user.name}")
         except Exception as e:
             logging.error(f"Erro ao salvar serviços: {str(e)}")
-        
-        await interaction.response.send_message(
-            f"✅ Você confirmou que ainda está usando o serviço **{config['nome']}**. Obrigado!",
-            ephemeral=True
-        )
 
 class LiberarButton(discord.ui.Button):
     def __init__(self, servico, servicos_config):
@@ -425,6 +524,11 @@ class LiberarButton(discord.ui.Button):
         # Remove dados de uso
         if "usage_data" in config:
             del config["usage_data"]
+            
+        # Limpa a flag de notificação de timeout
+        if "notificacao_timeout" in config:
+            del config["notificacao_timeout"]
+            logging.info(f"Flag de notificação de timeout removida para {config['nome']}")
             
         config["status"] = "disponível"
         config["usuario"] = None
@@ -461,15 +565,36 @@ class CheckView(discord.ui.View):
 class GlassfishCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.tempo_maximo_uso = 24  # Padrão: 24 horas
+        self.verificar_intervalo = 15  # Padrão: verificar a cada 15 minutos
+        self.lembrete_intervalo = 2  # Padrão: lembrar a cada 2 horas
+        self.max_extensoes = 3  # Padrão: máximo de 3 extensões permitidas
         self.persistent_message = None
         
-        # Configurações de timeout - carregadas das variáveis globais
-        self.tempo_maximo_uso = TEMPO_MAXIMO_USO
-        self.verificar_intervalo = VERIFICAR_INTERVALO
-        self.lembrete_intervalo = LEMBRETE_INTERVALO
+        # Carrega as configurações salvas, se existirem
+        self._load_config_from_file()
         
         # Inicia o loop de verificação de timeout
         self.check_services_loop.start()
+    
+    def _load_config_from_file(self):
+        """Carrega as configurações do arquivo config.json"""
+        try:
+            if os.path.exists(config_file):
+                with open(config_file, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                
+                # Atualiza as configurações de timeout a partir do arquivo
+                if "timeout" in config:
+                    self.tempo_maximo_uso = config["timeout"].get("tempo_maximo_uso", self.tempo_maximo_uso)
+                    self.verificar_intervalo = config["timeout"].get("verificar_intervalo", self.verificar_intervalo)
+                    self.lembrete_intervalo = config["timeout"].get("lembrete_intervalo", self.lembrete_intervalo)
+                    self.max_extensoes = config["timeout"].get("max_extensoes", self.max_extensoes)
+                    
+                logging.info(f"Configurações carregadas do arquivo {config_file}")
+        except Exception as e:
+            logging.error(f"Erro ao carregar configurações do arquivo {config_file}: {str(e)}")
+            logging.info("Usando valores padrão para as configurações")
     
     @app_commands.command(name="liberar_todos_glassfish", description="Libera todos os serviços Glassfish em uso (apenas TI)")
     async def liberar_todos_glassfish(self, interaction: discord.Interaction):
@@ -517,6 +642,11 @@ class GlassfishCog(commands.Cog):
                 # Remove dados de uso
                 if "usage_data" in config:
                     del config["usage_data"]
+                
+                # Limpa a flag de notificação de timeout
+                if "notificacao_timeout" in config:
+                    del config["notificacao_timeout"]
+                    logging.info(f"Flag de notificação de timeout removida para {config['nome']}")
                 
                 config["status"] = "disponível"
                 config["usuario"] = None
@@ -608,6 +738,7 @@ class GlassfishCog(commands.Cog):
             self.tempo_maximo_uso = config["timeout"].get("tempo_maximo_uso", TEMPO_MAXIMO_USO)
             self.verificar_intervalo = config["timeout"].get("verificar_intervalo", VERIFICAR_INTERVALO)
             self.lembrete_intervalo = config["timeout"].get("lembrete_intervalo", LEMBRETE_INTERVALO)
+            self.max_extensoes = config["timeout"].get("max_extensoes", 3)
             
             logging.info(f"Configurações recarregadas com sucesso do arquivo {config_file}")
             return True
@@ -636,6 +767,7 @@ class GlassfishCog(commands.Cog):
             config["timeout"]["tempo_maximo_uso"] = self.tempo_maximo_uso
             config["timeout"]["verificar_intervalo"] = self.verificar_intervalo
             config["timeout"]["lembrete_intervalo"] = self.lembrete_intervalo
+            config["timeout"]["max_extensoes"] = self.max_extensoes
             
             # Salva o arquivo
             with open(config_file, "w", encoding="utf-8") as f:
@@ -709,6 +841,9 @@ class GlassfishCog(commands.Cog):
                         else:
                             horas_desde_lembrete = horas_em_uso
                         
+                        # Verifica o número de extensões utilizadas
+                        extension_count = int(usage_data_dict.get("extension_count", 0))
+                        
                         logging.info(f"Serviço {servico_id} em uso por {config['usuario']} há {horas_em_uso:.1f} horas")
                         
                         # Timeout automático após tempo_maximo_uso horas sem verificação
@@ -762,45 +897,83 @@ class GlassfishCog(commands.Cog):
                             
                             # Atualiza o estado do serviço
                             config["status"] = "disponível"
+                            
+                            # Verifica se o usuário já foi notificado
+                            ja_notificado = False
+                            if "notificacao_timeout" in config and config["notificacao_timeout"] == True:
+                                ja_notificado = True
+                                logging.info(f"Usuário {user_id} já foi notificado sobre a liberação do serviço {servico_id}")
+                            
+                            # Tenta notificar o usuário por DM sobre a desconexão somente se ele ainda não foi notificado
+                            if not ja_notificado:
+                                try:
+                                    if user_id:
+                                        user = await self.bot.fetch_user(int(user_id))
+                                        await user.send(
+                                            f"⚠️ **Aviso de Desconexão do Glassfish**\n" +
+                                            f"Você foi desconectado automaticamente do serviço **{config['nome']}** {motivo_liberacao}.\n" +
+                                            f"Se ainda precisar usar este serviço, por favor solicite-o novamente."
+                                        )
+                                        # Marca como notificado
+                                        config["notificacao_timeout"] = True
+                                except Exception as dm_error:
+                                    logging.error(f"Erro ao enviar DM para o usuário {user_id}: {str(dm_error)}")
+                            
                             config["usuario"] = None
                             if "usage_data" in config:
                                 del config["usage_data"]
                             
                             alteracoes = True
+                            servicos_liberados += 1
                         
                         # Envia lembretes para verificação a cada lembrete_intervalo horas
-                        elif horas_desde_lembrete > self.lembrete_intervalo and user_id:
-                            # Tenta obter o usuário para enviar DM
-                            try:
-                                user = await self.bot.fetch_user(int(user_id))
-                                
-                                # Cria uma view com botões para confirmar o uso ou liberar
-                                view = CheckView(servico_id, self.bot.servicos_config)
-                                
-                                # Calcula tempo em horas e minutos para exibição mais precisa
-                                segundos_em_uso = (agora - ultimo_uso).total_seconds()
-                                horas_formatadas = int(segundos_em_uso / 3600)
-                                minutos_formatados = int((segundos_em_uso % 3600) / 60)
-                                tempo_formatado = f"{horas_formatadas} horas e {minutos_formatados} minutos"
-                                
-                                # Envia mensagem para o usuário
-                                await user.send(
-                                    f"⚠️ **Lembrete de uso do Glassfish**\n" +
-                                    f"Você está usando o serviço **{config['nome']}** há {tempo_formatado}.\n" +
-                                    f"Por favor, confirme se ainda está utilizando este serviço ou libere-o se não estiver mais usando.",
-                                    view=view
-                                )
-                                
-                                logging.info(f"Lembrete enviado para {config['usuario']} (ID: {user_id}) sobre o serviço {servico_id}")
-                                
-                                # Atualiza o timestamp do último lembrete
-                                usage_data = UsageData.from_dict(usage_data_dict)
-                                usage_data.update_reminder()
-                                config["usage_data"] = usage_data.to_dict()
-                                alteracoes = True
-                                
-                            except Exception as e:
-                                logging.error(f"Erro ao enviar lembrete para o usuário {user_id}: {str(e)}")
+                        # Garante que o lembrete só é enviado uma vez a cada intervalo
+                        elif horas_desde_lembrete >= self.lembrete_intervalo and user_id:
+                            # Evita enviar lembretes em cascata - só envia se o tempo desde o último lembrete
+                            # está dentro de uma janela de 15 minutos após completar o intervalo exato
+                            janela_lembrete = horas_desde_lembrete - self.lembrete_intervalo
+                            
+                            # Só envia se estiver dentro da primeira janela de 15 minutos após o intervalo
+                            if janela_lembrete < 0.25:  # 15 minutos em horas
+                                # Tenta obter o usuário para enviar DM
+                                try:
+                                    user = await self.bot.fetch_user(int(user_id))
+                                    
+                                    # Cria uma view com botões para confirmar o uso ou liberar
+                                    view = CheckView(servico_id, servicos_config)
+                                    
+                                    # Calcula tempo em horas e minutos para exibição mais precisa
+                                    segundos_em_uso = (agora - ultimo_uso).total_seconds()
+                                    horas_formatadas = int(segundos_em_uso / 3600)
+                                    minutos_formatados = int((segundos_em_uso % 3600) / 60)
+                                    tempo_formatado = f"{horas_formatadas} horas e {minutos_formatados} minutos"
+                                    
+                                    # Verifica se o usuário atingiu o limite de extensões
+                                    info_extensoes = ""
+                                    if extension_count >= self.max_extensoes:
+                                        info_extensoes = f"\n⚠️ **Atenção**: Você já utilizou todas as {extension_count}/{self.max_extensoes} extensões permitidas."
+                                    else:
+                                        info_extensoes = f"\n📝 Você já utilizou {extension_count}/{self.max_extensoes} extensões de tempo."
+                                    
+                                    # Envia mensagem para o usuário
+                                    await user.send(
+                                        f"⚠️ **Lembrete de uso do Glassfish**\n" +
+                                        f"Você está usando o serviço **{config['nome']}** há {tempo_formatado}.\n" +
+                                        f"Por favor, confirme se ainda está utilizando este serviço ou libere-o se não estiver mais usando." +
+                                        info_extensoes,
+                                        view=view
+                                    )
+                                    
+                                    logging.info(f"Lembrete enviado para {config['usuario']} (ID: {user_id}) sobre o serviço {servico_id}")
+                                    
+                                    # Atualiza o timestamp do último lembrete
+                                    usage_data = UsageData.from_dict(usage_data_dict)
+                                    usage_data.update_reminder()
+                                    config["usage_data"] = usage_data.to_dict()
+                                    alteracoes = True
+                                    
+                                except Exception as e:
+                                    logging.error(f"Erro ao enviar lembrete para o usuário {user_id}: {str(e)}")
                     
                     except Exception as e:
                         logging.error(f"Erro ao processar verificação para o serviço {servico_id}: {str(e)}")
@@ -858,7 +1031,7 @@ class GlassfishCog(commands.Cog):
                 self.editar_glassfish,
                 self.remover_glassfish,
                 self.liberar_todos_glassfish,
-                self.testar_lembrete_glassfish
+                self.testar_lembrete_glassfish,
             ]
             
             # Adiciona explicitamente cada comando que não esteja já registrado
@@ -997,72 +1170,132 @@ class GlassfishCog(commands.Cog):
                 ephemeral=True
             )
     
-    @app_commands.command(name="configurar_timeout_glassfish", description="Configura o tempo máximo de uso dos serviços Glassfish (apenas TI)")
+    @app_commands.command(name="configurar_timeout_glassfish", description="Configura o timeout para serviços Glassfish (apenas TI)")
     @app_commands.describe(
-        horas="Número de horas após o qual o serviço será liberado automaticamente se não for confirmado",
-        lembrete="Intervalo em horas entre lembretes para o usuário"
+        horas="Número de horas para timeout (1-168)",
+        intervalo_verificacao="Intervalo de verificação em minutos (5-60)",
+        intervalo_lembrete="Intervalo de lembretes em horas (1-12)"
     )
-    async def configurar_timeout_glassfish(self, interaction: discord.Interaction, horas: int, lembrete: int = None):
-        """Configura o tempo máximo de uso dos serviços Glassfish"""
-        # Verifica se o usuário tem permissão (equipe de TI)
-        is_ti = any(role.id == CARGO_TI_ID for role in interaction.user.roles)
-        if not is_ti:
+    async def configurar_timeout_glassfish(
+        self, 
+        interaction: discord.Interaction, 
+        horas: app_commands.Range[int, 1, 168] = None,
+        intervalo_verificacao: app_commands.Range[int, 5, 60] = None,
+        intervalo_lembrete: app_commands.Range[int, 1, 12] = None
+    ):
+        """Configura o timeout para serviços Glassfish"""
+        # Verifica se o usuário tem permissão (papel TI)
+        if not self._tem_permissao_ti(interaction.user):
+            await interaction.response.send_message("Você não tem permissão para usar este comando.", ephemeral=True)
+            return
+
+        # Verifica se pelo menos um parâmetro foi fornecido
+        if horas is None and intervalo_verificacao is None and intervalo_lembrete is None:
             await interaction.response.send_message(
-                "Apenas o setor de TI pode configurar o tempo máximo de uso dos serviços.",
+                f"Configuração atual:\n"
+                f"⏱️ Tempo máximo de uso: **{self.tempo_maximo_uso}** horas\n"
+                f"🔄 Intervalo de verificação: **{self.verificar_intervalo}** minutos\n"
+                f"🔔 Intervalo de lembretes: **{self.lembrete_intervalo}** horas\n"
+                f"Forneça pelo menos um parâmetro para alterar as configurações.",
                 ephemeral=True
             )
             return
-            
-        # Valida os parâmetros
-        if horas < 1 or horas > 72:
-            await interaction.response.send_message(
-                "O tempo máximo de uso deve estar entre 1 e 72 horas.",
-                ephemeral=True
-            )
-            return
-            
-        if lembrete is not None:
-            if lembrete < 1 or lembrete >= horas:
-                await interaction.response.send_message(
-                    f"O intervalo entre lembretes deve estar entre 1 e {horas-1} horas.",
-                    ephemeral=True
-                )
-                return
-            self.lembrete_intervalo = lembrete
-            
-        # Atualiza as configurações
-        old_timeout = self.tempo_maximo_uso
-        self.tempo_maximo_uso = horas
-        self.verificar_intervalo = max(1, horas // 4)  # Ajusta automaticamente o intervalo de verificação
-        
-        # Se o lembrete não foi especificado, ajustamos proporcionalmente
-        if lembrete is None:
-            self.lembrete_intervalo = max(1, horas // 2)
-            
-        # Salva as configurações atualizadas no arquivo
-        self._save_config_to_file()
-            
-        # Log da alteração
-        logging.info(f"Configurações de timeout alteradas por {interaction.user.name}: Tempo máximo = {horas}h, Lembrete = {self.lembrete_intervalo}h")
-        
-        # Atualiza a mensagem persistente para refletir a nova configuração
-        await self.setup_persistent_message()
-        
-        # Notifica no canal de logs
-        channel = interaction.guild.get_channel(LOGS_CHANNEL_ID)
-        if channel:
-            await channel.send(
-                f"⚙️ **Configuração de Timeout**: <@{interaction.user.id}> alterou o tempo máximo de uso dos serviços Glassfish de {old_timeout}h para {horas}h."
-            )
-            
+
+        # Atualiza os valores
+        if horas is not None:
+            self.tempo_maximo_uso = horas
+        if intervalo_verificacao is not None:
+            self.verificar_intervalo = intervalo_verificacao
+        if intervalo_lembrete is not None:
+            self.lembrete_intervalo = intervalo_lembrete
+
+        # Salva as configurações
+        self._salvar_configuracoes()
+
+        # Reinicia o loop de verificação se o intervalo foi alterado
+        if intervalo_verificacao is not None:
+            self.check_services_loop.cancel()
+            self.check_services_loop.change_interval(minutes=self.verificar_intervalo)
+            self.check_services_loop.restart()
+
         await interaction.response.send_message(
-            f"✅ Configurações de timeout atualizadas:\n" +
-            f"- Tempo máximo de uso: {horas} horas\n" +
-            f"- Intervalo de lembretes: {self.lembrete_intervalo} horas\n" +
-            f"Os serviços em uso serão verificados a cada {self.verificar_intervalo} hora(s).",
+            f"✅ Configurações atualizadas:\n"
+            f"⏱️ Tempo máximo de uso: **{self.tempo_maximo_uso}** horas\n"
+            f"🔄 Intervalo de verificação: **{self.verificar_intervalo}** minutos\n"
+            f"🔔 Intervalo de lembretes: **{self.lembrete_intervalo}** horas",
             ephemeral=True
         )
     
+    @app_commands.command(name="configurar_extensoes_glassfish", description="Configura o número máximo de extensões permitidas (apenas TI)")
+    @app_commands.describe(
+        max_extensoes="Número máximo de extensões permitidas (1-10)"
+    )
+    async def configurar_extensoes_glassfish(
+        self, 
+        interaction: discord.Interaction, 
+        max_extensoes: app_commands.Range[int, 1, 10] = None
+    ):
+        """Configura o número máximo de extensões permitidas para serviços Glassfish"""
+        # Verifica se o usuário tem permissão (papel TI)
+        if not self._tem_permissao_ti(interaction.user):
+            await interaction.response.send_message("Você não tem permissão para usar este comando.", ephemeral=True)
+            return
+
+        # Se não foi fornecido um valor, apenas mostra a configuração atual
+        if max_extensoes is None:
+            await interaction.response.send_message(
+                f"Configuração atual:\n"
+                f"🔢 Número máximo de extensões permitidas: **{self.max_extensoes}**\n"
+                f"Forneça um valor entre 1 e 10 para alterar a configuração.",
+                ephemeral=True
+            )
+            return
+
+        # Atualiza o valor
+        self.max_extensoes = max_extensoes
+
+        # Salva as configurações
+        self._salvar_configuracoes()
+
+        await interaction.response.send_message(
+            f"✅ Configuração atualizada:\n"
+            f"🔢 Número máximo de extensões permitidas: **{self.max_extensoes}**",
+            ephemeral=True
+        )
+
+    def _salvar_configuracoes(self):
+        """Salva as configurações no arquivo config.json"""
+        try:
+            # Carrega o arquivo atual para não sobrescrever outras configurações
+            try:
+                with open(config_file, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                config = {
+                    "cargos": {"ti_id": CARGO_TI_ID},
+                    "canais": {
+                        "logs_id": LOGS_CHANNEL_ID,
+                        "persistent_id": PERSISTENT_CHANNEL_ID
+                    },
+                    "timeout": {}
+                }
+            
+            # Atualiza as configurações de timeout
+            config["timeout"]["tempo_maximo_uso"] = self.tempo_maximo_uso
+            config["timeout"]["verificar_intervalo"] = self.verificar_intervalo
+            config["timeout"]["lembrete_intervalo"] = self.lembrete_intervalo
+            config["timeout"]["max_extensoes"] = self.max_extensoes
+            
+            # Salva o arquivo
+            with open(config_file, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4)
+                
+            logging.info(f"Configurações de timeout salvas no arquivo {config_file}")
+            return True
+        except Exception as e:
+            logging.error(f"Erro ao salvar configurações no arquivo {config_file}: {str(e)}")
+            return False
+        
     @app_commands.command(name="obter_timeout_glassfish", description="Mostra as configurações atuais de timeout dos serviços Glassfish")
     async def obter_timeout_glassfish(self, interaction: discord.Interaction):
         """Mostra as configurações atuais de timeout dos serviços Glassfish"""
@@ -1070,7 +1303,8 @@ class GlassfishCog(commands.Cog):
             f"**Configurações atuais de timeout dos serviços Glassfish:**\n" +
             f"- Tempo máximo sem confirmação: {self.tempo_maximo_uso} horas\n" +
             f"- Intervalo de lembretes: {self.lembrete_intervalo} horas\n" +
-            f"- Verificação de serviços: a cada {self.verificar_intervalo} hora(s)",
+            f"- Verificação de serviços: a cada {self.verificar_intervalo} hora(s)\n" +
+            f"- Limite de extensões permitidas: {self.max_extensoes} vezes",
             ephemeral=True
         )
         
@@ -2276,3 +2510,235 @@ class TestarLembreteView(discord.ui.View):
     def __init__(self, servicos_config, simular_tempo: int):
         super().__init__(timeout=None)
         self.add_item(TestarLembreteSelect(servicos_config, simular_tempo))
+
+    @app_commands.command(name="configurar_extensoes_glassfish", description="Configura o número máximo de extensões permitidas")
+    @app_commands.describe(
+        max_extensoes="Número máximo de extensões permitidas (0 para desativar extensões)"
+    )
+    async def configurar_extensoes_glassfish(self, interaction: discord.Interaction, max_extensoes: int = None):
+        """
+        Configura o número máximo de extensões que um usuário pode solicitar para um serviço Glassfish.
+        Este comando só pode ser executado por usuários com o cargo de TI.
+        """
+        try:
+            # Verifica se o usuário tem permissão (cargo de TI)
+            is_ti = any(role.id == CARGO_TI_ID for role in interaction.user.roles)
+            if not is_ti:
+                await interaction.response.send_message(
+                    "❌ Apenas usuários com cargo de TI podem configurar as extensões.",
+                    ephemeral=True
+                )
+                logging.warning(f"{interaction.user.name} tentou configurar extensões sem permissão")
+                return
+            
+            # Se max_extensoes for None, mostra a configuração atual
+            if max_extensoes is None:
+                await interaction.response.send_message(
+                    f"**Configuração atual de extensões:**\n" +
+                    f"🔹 Número máximo de extensões: **{self.max_extensoes}** extensões\n\n" +
+                    f"Para alterar, use `/configurar_extensoes_glassfish max_extensoes:<valor>`",
+                    ephemeral=True
+                )
+                return
+            
+            # Verifica se o valor é válido
+            if max_extensoes < 0:
+                await interaction.response.send_message(
+                    "❌ O número máximo de extensões não pode ser negativo.",
+                    ephemeral=True
+                )
+                return
+                
+            # Atualiza a configuração
+            valor_antigo = self.max_extensoes
+            self.max_extensoes = max_extensoes
+            
+            # Salva as configurações no arquivo
+            if self._save_config_to_file():
+                # Notifica no canal de logs
+                channel = interaction.guild.get_channel(LOGS_CHANNEL_ID)
+                if channel:
+                    await channel.send(
+                        f"⚙️ **Configuração alterada**: <@{interaction.user.id}> alterou o número máximo de extensões.\n" +
+                        f"Valor anterior: **{valor_antigo}** extensões\n" +
+                        f"Novo valor: **{self.max_extensoes}** extensões"
+                    )
+                
+                # Responde ao usuário
+                await interaction.response.send_message(
+                    f"✅ Configuração de extensões atualizada com sucesso!\n\n" +
+                    f"**Nova configuração:**\n" +
+                    f"🔹 Número máximo de extensões: **{self.max_extensoes}** extensões",
+                    ephemeral=True
+                )
+                
+                logging.info(f"{interaction.user.name} alterou o número máximo de extensões de {valor_antigo} para {self.max_extensoes}")
+            else:
+                await interaction.response.send_message(
+                    "❌ Ocorreu um erro ao salvar as configurações. Verifique os logs para mais detalhes.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            logging.error(f"Erro ao configurar extensões: {str(e)}")
+            await interaction.response.send_message(
+                f"❌ Ocorreu um erro ao configurar as extensões: {str(e)}",
+                ephemeral=True
+            )
+
+    @app_commands.command(name="obter_timeout_glassfish", description="Mostra as configurações atuais de timeout")
+    async def obter_timeout_glassfish(self, interaction: discord.Interaction):
+        """Mostra as configurações atuais de timeout dos serviços Glassfish"""
+        await interaction.response.send_message(
+            f"**Configurações atuais de timeout dos serviços Glassfish:**\n" +
+            f"- Tempo máximo sem confirmação: {self.tempo_maximo_uso} horas\n" +
+            f"- Intervalo de lembretes: {self.lembrete_intervalo} horas\n" +
+            f"- Verificação de serviços: a cada {self.verificar_intervalo} hora(s)\n" +
+            f"- Limite de extensões permitidas: {self.max_extensoes} vezes",
+            ephemeral=True
+        )
+        
+    @app_commands.command(name="relatorio_glassfish", description="Gera um relatório de uso e notificações dos serviços Glassfish (apenas TI)")
+    async def relatorio_glassfish(self, interaction: discord.Interaction):
+        """Gera um relatório detalhado de uso e notificações dos serviços Glassfish"""
+        # Verifica se o usuário tem permissão (equipe de TI)
+        is_ti = any(role.id == CARGO_TI_ID for role in interaction.user.roles)
+        if not is_ti:
+            await interaction.response.send_message(
+                "Apenas o setor de TI pode gerar relatórios dos serviços.",
+                ephemeral=True
+            )
+            return
+        
+        # Indica que está processando
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            # Carrega os serviços
+            with open("services.json", "r", encoding="utf-8") as file:
+                servicos_config = json.load(file)
+            
+            # Cria listas para organizar os dados
+            em_uso = []
+            notificados = []
+            liberados_auto = []  # Vamos buscar nos logs do último dia
+            
+            # Data atual para cálculos
+            agora = datetime.datetime.now()
+            
+            # Processa serviços em uso
+            for servico_id, config in servicos_config.items():
+                if config["status"] == "em uso":
+                    # Calcula o tempo de uso mesmo sem usage_data disponível
+                    tempo_uso = "Tempo desconhecido"
+                    ultima_confirmacao = "Nunca confirmado"
+                    ultimo_lembrete = "Nenhum lembrete enviado"
+                    
+                    if "usage_data" in config:
+                        try:
+                            usage_data = config["usage_data"]
+                            # Calcula tempo em uso
+                            timestamp = datetime.datetime.fromisoformat(usage_data["timestamp"])
+                            segundos_em_uso = (agora - timestamp).total_seconds()
+                            horas_em_uso = segundos_em_uso / 3600
+                            minutos_em_uso = (segundos_em_uso % 3600) / 60
+                            tempo_uso = f"{int(horas_em_uso)} horas e {int(minutos_em_uso)} minutos"
+                            
+                            # Verifica última confirmação
+                            if usage_data.get("last_check"):
+                                last_check = datetime.datetime.fromisoformat(usage_data["last_check"])
+                                segundos_desde_check = (agora - last_check).total_seconds()
+                                horas_desde_check = int(segundos_desde_check / 3600)
+                                minutos_desde_check = int((segundos_desde_check % 3600) / 60)
+                                ultima_confirmacao = f"Há {horas_desde_check} horas e {minutos_desde_check} minutos"
+                            
+                            # Verifica último lembrete
+                            if usage_data.get("last_reminder"):
+                                last_reminder = datetime.datetime.fromisoformat(usage_data["last_reminder"])
+                                segundos_desde_lembrete = (agora - last_reminder).total_seconds()
+                                horas_desde_lembrete = int(segundos_desde_lembrete / 3600)
+                                minutos_desde_lembrete = int((segundos_desde_lembrete % 3600) / 60)
+                                ultimo_lembrete = f"Há {horas_desde_lembrete} horas e {minutos_desde_lembrete} minutos"
+                                
+                                # Se recebeu lembrete mas não confirmou, ou se a última confirmação é anterior ao último lembrete
+                                if not usage_data.get("last_check") or (
+                                    last_reminder > datetime.datetime.fromisoformat(usage_data["last_check"])
+                                ):
+                                    notificados.append({
+                                        "nome": config["nome"],
+                                        "usuario": config["usuario"],
+                                        "quando": f"Há {horas_desde_lembrete} horas e {minutos_desde_lembrete} minutos",
+                                        "resposta": "Sem resposta ainda"
+                                    })
+                            
+                        except Exception as e:
+                            logging.error(f"Erro ao calcular tempo de uso para {servico_id}: {str(e)}")
+                    
+                    servico_info = {
+                        "nome": config["nome"], 
+                        "usuario": config["usuario"],
+                        "tempo_uso": tempo_uso,
+                        "ultima_confirmacao": ultima_confirmacao,
+                        "ultimo_lembrete": ultimo_lembrete
+                    }
+                    em_uso.append(servico_info)
+            
+            # Monta o relatório
+            resposta = ["**📊 Relatório de Uso dos Serviços Glassfish**\n"]
+            
+            # Serviços em uso
+            resposta.append("**🔴 Serviços em Uso:**")
+            if em_uso:
+                for servico in em_uso:
+                    resposta.append(
+                        f"• **{servico['nome']}** - Usuário: {servico['usuario']} | " +
+                        f"Em uso por: {servico['tempo_uso']} | " +
+                        f"Última confirmação: {servico['ultima_confirmacao']} | " +
+                        f"Último lembrete: {servico['ultimo_lembrete']}"
+                    )
+            else:
+                resposta.append("• Nenhum serviço em uso no momento.")
+            
+            # Usuários notificados
+            resposta.append("\n**📨 Lembretes Enviados Sem Resposta:**")
+            if notificados:
+                for notificacao in notificados:
+                    resposta.append(
+                        f"• **{notificacao['nome']}** - Usuário: {notificacao['usuario']} | " +
+                        f"Lembrete enviado: {notificacao['quando']} | {notificacao['resposta']}"
+                    )
+            else:
+                resposta.append("• Nenhum lembrete pendente de resposta.")
+            
+            # Serviços liberados automaticamente
+            resposta.append("\n**⏰ Serviços Liberados Automaticamente (últimas 24h):**")
+            if liberados_auto:
+                for servico in liberados_auto:
+                    if "erro" not in servico:
+                        resposta.append(f"• **{servico['nome']}** - Usuário: {servico['usuario']} | Quando: {servico['quando']}")
+                    else:
+                        resposta.append(f"• {servico['erro']}")
+            else:
+                resposta.append("• Nenhum serviço foi liberado automaticamente nas últimas 24 horas.")
+            
+            # Estatísticas gerais
+            total_servicos = len(servicos_config)
+            disponiveis = total_servicos - len(em_uso)
+            
+            resposta.append(f"\n**📈 Estatísticas:**")
+            resposta.append(f"• Total de serviços: {total_servicos}")
+            resposta.append(f"• Serviços disponíveis: {disponiveis} ({int(disponiveis/total_servicos*100)}%)")
+            resposta.append(f"• Serviços em uso: {len(em_uso)} ({int(len(em_uso)/total_servicos*100)}%)")
+            
+            # Envia o relatório
+            await interaction.followup.send("\n".join(resposta), ephemeral=True)
+            
+        except Exception as e:
+            logging.error(f"Erro ao gerar relatório: {str(e)}")
+            await interaction.followup.send(
+                f"Ocorreu um erro ao gerar o relatório: {str(e)}",
+                ephemeral=True
+            )
+
+async def setup(bot):
+    """Configuração do cog"""
+    await bot.add_cog(GlassfishCog(bot))
