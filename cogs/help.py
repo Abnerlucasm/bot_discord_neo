@@ -283,8 +283,7 @@ class HelpCog(commands.Cog):
                     )
                     embed.add_field(
                         name="📋 Como usar",
-                        value="Use `/testar_lembrete_glassfish servico_id:<id> simular_tempo:<horas>`\n"
-                              "• `servico_id`: ID do serviço para testar (ex: 97-1)\n"
+                        value="Use `/testar_lembrete_glassfish simular_tempo:<horas>`\n"
                               "• `simular_tempo`: (Opcional) Tempo simulado de uso em horas. Padrão: 3",
                         inline=False
                     )
@@ -295,10 +294,230 @@ class HelpCog(commands.Cog):
                     )
                     embed.add_field(
                         name="📝 Observações",
-                        value="• O serviço precisa estar em uso para o teste funcionar\n"
-                              "• Envia uma mensagem direta para o usuário que está usando o serviço\n"
+                        value="• Exibe uma lista de serviços em uso para testar\n"
+                              "• Simula tempo de uso conforme especificado\n"
                               "• Útil para testar o sistema de lembretes sem esperar o tempo real\n"
                               "• Apenas para fins de desenvolvimento e testes",
+                        inline=False
+                    )
+
+                elif comando == "modo_desenvolvimento_glassfish":
+                    embed = discord.Embed(
+                        title="🧪 Comando: /modo_desenvolvimento_glassfish",
+                        description="Ativa ou desativa o modo de desenvolvimento para testes.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/modo_desenvolvimento_glassfish ativar:<true/false>`\n"
+                              "• `ativar`: True para ativar, False para desativar",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Observações",
+                        value="• **Modo ativado**: Tempos reduzidos (1-2 horas vs 24 horas)\n"
+                              "• **Verificações**: Mais frequentes (1 minuto vs 15 minutos)\n"
+                              "• **Ideal para**: Testes rápidos e desenvolvimento\n"
+                              "• **Atenção**: Não usar em produção - apenas para testes",
+                        inline=False
+                    )
+
+                elif comando == "simular_tempo_glassfish":
+                    embed = discord.Embed(
+                        title="⏰ Comando: /simular_tempo_glassfish",
+                        description="Simula que um serviço está em uso há X horas atrás.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/simular_tempo_glassfish servico_id:<id> horas_atras:<horas>`\n"
+                              "• `servico_id`: ID do serviço para simular (ex: 97-1)\n"
+                              "• `horas_atras`: Quantas horas atrás simular o início do uso",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Observações",
+                        value="• **Pré-requisito**: O serviço deve estar em uso\n"
+                              "• **Funcionalidade**: Altera o timestamp de início de uso\n"
+                              "• **Uso**: Testar cenários de timeout sem esperar tempo real\n"
+                              "• **Cuidado**: Use apenas em ambiente de testes",
+                        inline=False
+                    )
+
+                elif comando == "status_servico_glassfish":
+                    embed = discord.Embed(
+                        title="📊 Comando: /status_servico_glassfish",
+                        description="Mostra status detalhado e analytics de um serviço específico.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/status_servico_glassfish servico_id:<id>`\n"
+                              "• `servico_id`: ID do serviço para verificar (ex: 97-1)",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Informações Exibidas",
+                        value="• **Status**: Disponível ou em uso\n"
+                              "• **Usuário**: Quem está usando (se aplicável)\n"
+                              "• **Tempo de uso**: Há quanto tempo está em uso\n"
+                              "• **Extensões**: Quantas foram utilizadas\n"
+                              "• **Timestamps**: Último check e lembrete\n"
+                              "• **Analytics**: Dados de uso detalhados",
+                        inline=False
+                    )
+
+                elif comando == "testar_envio_lembrete_glassfish":
+                    embed = discord.Embed(
+                        title="📧 Comando: /testar_envio_lembrete_glassfish",
+                        description="Testa o envio de lembrete diretamente para o usuário logado.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/testar_envio_lembrete_glassfish`\n"
+                              "• Comando simples sem parâmetros\n"
+                              "• Envia um lembrete de teste para você mesmo",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Observações",
+                        value="• **Função**: Testa o sistema de DM de lembretes\n"
+                              "• **Destinatário**: Você mesmo (usuário que executa)\n"
+                              "• **Propósito**: Verificar se mensagens diretas estão funcionando\n"
+                              "• **Não afeta**: Serviços reais em uso",
+                        inline=False
+                    )
+
+                elif comando == "relatorio_glassfish":
+                    embed = discord.Embed(
+                        title="📋 Comando: /relatorio_glassfish",
+                        description="Gera um relatório completo de uso e estatísticas dos serviços.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/relatorio_glassfish`\n"
+                              "• Comando simples sem parâmetros\n"
+                              "• Gera relatório completo automaticamente",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Informações do Relatório",
+                        value="• **Serviços em uso**: Lista detalhada com tempos\n"
+                              "• **Lembretes pendentes**: Usuários que não responderam\n"
+                              "• **Liberações automáticas**: Últimas 24 horas\n"
+                              "• **Estatísticas**: Percentuais de uso e disponibilidade\n"
+                              "• **Analytics**: Dados de extensões e confirmações",
+                        inline=False
+                    )
+
+                elif comando == "adicionar_glassfish":
+                    embed = discord.Embed(
+                        title="➕ Comando: /adicionar_glassfish",
+                        description="Adiciona um novo serviço Glassfish ao sistema.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/adicionar_glassfish`\n"
+                              "• Abre um formulário para preenchimento\n"
+                              "• Solicita ID e nome do serviço\n"
+                              "• Permite configurar permissões de cargos",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Processo de Adição",
+                        value="• **Passo 1**: Preencher ID do serviço (ex: 97-1)\n"
+                              "• **Passo 2**: Definir nome descritivo\n"
+                              "• **Passo 3**: Selecionar cargos com permissão\n"
+                              "• **Resultado**: Serviço adicionado e disponível",
+                        inline=False
+                    )
+
+                elif comando == "editar_glassfish":
+                    embed = discord.Embed(
+                        title="✏️ Comando: /editar_glassfish",
+                        description="Edita as informações de um serviço Glassfish existente.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/editar_glassfish`\n"
+                              "• Exibe lista de serviços existentes\n"
+                              "• Selecione o serviço para editar\n"
+                              "• Modifique as informações desejadas",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Informações Editáveis",
+                        value="• **Nome**: Descrição do serviço\n"
+                              "• **Permissões**: Cargos que podem usar (em desenvolvimento)\n"
+                              "• **Observação**: ID do serviço não pode ser alterado\n"
+                              "• **Segurança**: Alterações são registradas nos logs",
+                        inline=False
+                    )
+
+                elif comando == "remover_glassfish":
+                    embed = discord.Embed(
+                        title="🗑️ Comando: /remover_glassfish",
+                        description="Remove um serviço Glassfish do sistema.",
+                        color=discord.Color.blue()
+                    )
+                    embed.add_field(
+                        name="📋 Como usar",
+                        value="Use `/remover_glassfish`\n"
+                              "• Exibe lista de serviços existentes\n"
+                              "• Selecione o serviço para remover\n"
+                              "• Confirme a remoção",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="🔒 Permissões",
+                        value="• Este comando está disponível apenas para usuários com o cargo de TI",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📝 Processo de Remoção",
+                        value="• **Verificação**: Sistema verifica se está em uso\n"
+                              "• **Confirmação**: Solicitada para serviços em uso\n"
+                              "• **Segurança**: Ação é registrada nos logs\n"
+                              "• **Irreversível**: Remoção é permanente",
                         inline=False
                     )
 
@@ -356,16 +575,27 @@ class HelpCog(commands.Cog):
                 )
 
                 embed.add_field(
-                    name="🔗 Links Úteis",
+                    name="🔗 Links Úteis e Comandos Administrativos",
                     value="• 📚 Documentação: https://github.com/Abnerlucasm/bot_discord_neo\n"
+                          "• 🧪 Guia de Desenvolvimento: DESENVOLVIMENTO.md (para testes)\n"
                           "• 💡 Sugestões? Entre em contato com a equipe\n"
-                          "• ❓ Dúvidas? Use /ajuda <comando> para mais detalhes\n"
-                          "• 🛠️ Comandos administrativos:\n"
-                          "  - `/recarregar_config_glassfish` - Recarrega configurações\n"
-                          "  - `/verificacao_forcada_glassfish` - Força verificação de timeout\n"
-                          "  - `/configurar_timeout_glassfish` - Configura tempo máximo de uso\n"
-                          "  - `/obter_timeout_glassfish` - Exibe configurações de timeout\n"
-                          "  - `/liberar_todos_glassfish` - Libera todos os serviços em uso",
+                          "• ❓ Dúvidas? Use /ajuda <comando> para mais detalhes\n\n"
+                          "**🛠️ Comandos administrativos (TI):**\n"
+                          "• `/obter_timeout_glassfish` - Configurações de timeout\n"
+                          "• `/relatorio_glassfish` - Relatório de uso\n"
+                          "• `/recarregar_config_glassfish` - Recarrega configurações\n"
+                          "• `/verificacao_forcada_glassfish` - Força verificação\n"
+                          "• `/configurar_timeout_glassfish` - Configura timeouts\n"
+                          "• `/liberar_todos_glassfish` - Libera todos os serviços\n"
+                          "• `/adicionar_glassfish` - Adiciona serviço\n"
+                          "• `/editar_glassfish` - Edita serviço\n"
+                          "• `/remover_glassfish` - Remove serviço\n\n"
+                          "**🧪 Comandos de desenvolvimento (TI):**\n"
+                          "• `/modo_desenvolvimento_glassfish` - Modo de teste\n"
+                          "• `/simular_tempo_glassfish` - Simula tempo de uso\n"
+                          "• `/status_servico_glassfish` - Status detalhado\n"
+                          "• `/testar_lembrete_glassfish` - Testa lembretes\n"
+                          "• `/testar_envio_lembrete_glassfish` - Teste direto de DM",
                     inline=False
                 )
 
