@@ -1,4 +1,4 @@
-# cogs/example.py
+# Exemplo de comando para adicionar ao diretório cogs.
 from discord.ext import commands
 from discord import app_commands
 import logging
@@ -6,7 +6,7 @@ import logging
 class ExampleCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-    
+
     @app_commands.command(name="ping", description="Verifica a latência do bot")
     async def ping(self, interaction):
         try:

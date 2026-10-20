@@ -23,13 +23,9 @@ Este é um bot do Discord para gerenciar e otimizar rotinas internas da Neo Sist
 ## Requisitos
 
 - **Python 3.8 ou superior**
-- **Bibliotecas necessárias**:
-  - `discord.py`
-  - `json`
-  - `asyncio`
-  - `logging`
+- **Dependência de execução**: `discord.py` (versão `2.7.1`)
   
-Você pode instalar as dependências necessárias criando um ambiente virtual (recomendado) e utilizando o `pip`:
+Os módulos `json`, `asyncio` e `logging` fazem parte da biblioteca padrão do Python. Instale a dependência do bot em um ambiente virtual:
 
 ```bash
 # Criação do ambiente virtual
@@ -48,42 +44,81 @@ pip install -r requirements.txt
 ## Estrutura do Projeto
 
 ```plaintext
-/bot_Discord_Neo
+bot_discord_neo/
 │
-├── main.py                        # Código principal do bot
-├── cogs/                          # Diretório que contém a lógica modular do bot
-│   ├── glassfish.py              # Cog principal do Glassfish
-│   ├── glassfish_commands.py     # Comandos slash do Glassfish
-│   ├── glassfish_service.py      # Lógica de serviços e verificações
-│   ├── glassfish_config.py       # Configurações e constantes
-│   ├── glassfish_models.py       # Modelos de dados (UsageData)
-│   ├── glassfish_ui.py           # Componentes de interface (botões, dropdowns)
-│   ├── glassfish_admin_ui.py     # Interface administrativa
-│   ├── test_glassfish.py         # Componentes para testes
-│   ├── help.py                   # Sistema de ajuda
-│   └── outros_cogs.py            # Outros comandos do bot
-├── config.json                   # Configurações gerais (cargos, canais, timeouts)
-├── services.json                 # Configuração dos serviços Glassfish
-├── token.txt                     # Token do bot
-├── requirements.txt              # Dependências do projeto
-├── logs/                         # Logs do sistema
-├── data/                         # Dados persistentes
-├── assets/                       # Recursos (imagens, etc.)
-└── venv/                         # Ambiente virtual
+├── main.py
+├── cogs/
+│   ├── glassfish/
+│   │   ├── __init__.py
+│   │   ├── cog.py
+│   │   ├── commands/
+│   │   │   ├── admin.py
+│   │   │   ├── base.py
+│   │   │   ├── development.py
+│   │   │   └── user.py
+│   │   ├── core/
+│   │   │   ├── config.py
+│   │   │   ├── contracts.py
+│   │   │   ├── models.py
+│   │   │   ├── monitoring.py
+│   │   │   ├── ownership.py
+│   │   │   ├── permissions.py
+│   │   │   ├── repository.py
+│   │   │   └── service.py
+│   │   └── ui/
+│   │       ├── problem_report.py
+│   │       ├── role_permissions.py
+│   │       ├── service_actions.py
+│   │       ├── service_admin.py
+│   │       ├── service_forms.py
+│   │       ├── service_select.py
+│   │       └── tests.py
+│   ├── help.py
+│   ├── help_topics/
+│   │   ├── __init__.py
+│   │   ├── agendamentos.py
+│   │   ├── glassfish_admin.py
+│   │   ├── glassfish_development.py
+│   │   ├── glassfish_user.py
+│   │   ├── geral.py
+│   │   └── overview.py
+│   ├── interaction_handler.py
+│   ├── persistence.py
+│   ├── schedule_update.py
+│   ├── schedule_ui/
+│   │   ├── __init__.py
+│   │   ├── agendamento_confirm.py
+│   │   ├── agendamento.py
+│   │   ├── atualizacao.py
+│   │   ├── beta99.py
+│   │   ├── components.py
+│   │   └── constants.py
+│   └── utils.py
+├── docs/
+│   └── desenvolvimento.md
+├── examples/
+│   └── novo_comando.py
+├── assets/
+│   └── logo.jpg
+├── requirements.txt
+├── .gitignore
+└── README.md
 ```
 
-### Arquitetura Modular
+Os arquivos `config.json`, `services.json` e `token.txt`, além das pastas `data/` e `logs/`, são usados em execução e não fazem parte do código versionado.
+O diretório `examples/` contém um modelo para adicionar comandos ao bot.
 
-O sistema Glassfish foi completamente refatorado em uma arquitetura modular:
+### Camadas do Glassfish
 
-- **`glassfish.py`**: Cog principal que orquestra todas as funcionalidades
-- **`glassfish_commands.py`**: Implementa todos os comandos slash
-- **`glassfish_service.py`**: Gerencia a lógica de negócio dos serviços
-- **`glassfish_config.py`**: Centraliza configurações e constantes
-- **`glassfish_models.py`**: Define modelos de dados como UsageData
-- **`glassfish_ui.py`**: Componentes básicos de interface
-- **`glassfish_admin_ui.py`**: Interface para administração
-- **`test_glassfish.py`**: Ferramentas para desenvolvimento e testes
+- **`glassfish/cog.py`** integra os comandos ao Discord e controla o ciclo de vida do serviço.
+- **`glassfish/commands/`** separa comandos de usuário, administração e desenvolvimento.
+- **`glassfish/core/`** define contratos, configuração, modelos, permissões e repositório. `service.py` coordena o serviço e `monitoring.py` processa timeouts e lembretes.
+- **`glassfish/ui/`** concentra os formulários, seletores e botões dos fluxos de serviço.
+- **`help_topics/`** separa o conteúdo do comando `/ajuda` por assunto.
+- **`schedule_ui/`** separa componentes compartilhados dos fluxos de agendamento, atualização e versão beta.
+- **`persistence.py`** restaura as views das mensagens. **`interaction_handler.py`** registra essa restauração uma vez no ciclo de vida do bot.
+
+Os comandos de serviço mantêm os nomes atuais. Os seletores com opções dinâmicas mostram até 25 itens por página e os autocompletes respeitam o limite de 25 opções. A lista pública valida novamente os cargos antes de permitir o uso, e a configuração administrativa usa o seletor nativo de cargos do Discord. A autorização de quem reservou um serviço usa o ID do Discord, com compatibilidade para registros antigos que ainda não armazenam esse ID. Os formulários usam `Label` e anexos opcionais com `FileUpload`, disponíveis na versão fixada de `discord.py`.
 
 ## Comandos Disponíveis
 
@@ -162,7 +197,7 @@ O sistema implementa um controle inteligente de uso dos serviços:
 
 Para facilitar testes, o sistema inclui um modo de desenvolvimento:
 
-- Tempos reduzidos (1-2 horas vs 24 horas)
+- Tempo máximo reduzido (1 hora vs 24 horas)
 - Verificações mais frequentes (1 minuto vs 15 minutos)
 - Comandos de simulação de tempo
 - Testes diretos de funcionalidades
@@ -274,7 +309,7 @@ Utilize o comando **`/ajuda`** ou **`/sobre`** para mais detalhes e explicaçõe
 O sistema funciona de forma totalmente automatizada:
 - Usuários solicitam serviços via interface visual
 - Sistema monitora uso e envia lembretes automáticos
-- Liberação automática após timeout configúravel
+- Liberação automática após timeout configurável
 - Logs completos de todas as ações
 - Interface administrativa para gestão
 
@@ -287,14 +322,10 @@ O sistema funciona de forma totalmente automatizada:
 
 ## Documentação Adicional
 
-- **[Guia de Desenvolvimento e Testes](DESENVOLVIMENTO.md)** - Documentação completa para desenvolvimento, testes e debugging do sistema Glassfish
+- **[Guia de Desenvolvimento e Testes](docs/desenvolvimento.md)** - Configuração do modo de desenvolvimento e cenários operacionais.
 
 ## Contribuindo
 
 Sinta-se à vontade para fazer contribuições! Abra uma issue ou envie um pull request para adicionar novas funcionalidades ou corrigir problemas.
 
-Para desenvolvedores, consulte o [Guia de Desenvolvimento](DESENVOLVIMENTO.md) para informações sobre testes e debugging.
-
-## Licença
-
-Este projeto está sob a [Licença MIT](LICENSE).
+Para desenvolvedores, consulte o [Guia de Desenvolvimento](docs/desenvolvimento.md) antes de alterar as configurações de execução.
